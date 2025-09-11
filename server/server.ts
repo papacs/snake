@@ -167,8 +167,13 @@ function startGameLoop(roomId: string) {
     }
 
 
+    const playersForClient = Array.from(room.players.values()).map(p => ({
+      ...p,
+      snake: p.snake.map(s => [s.x, s.y])
+    }));
+
     io.to(roomId).emit('gameState', {
-      players: Array.from(room.players.values()),
+      players: playersForClient,
       foods: room.foods,
       gridSize: room.gridSize,
     });

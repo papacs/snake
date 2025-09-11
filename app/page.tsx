@@ -14,7 +14,7 @@ type Player = {
   id: string;
   name: string;
   isReady: boolean;
-  snake: Position[];
+  snake: number[][]; // Changed from Position[] to number[][]
   direction: "UP" | "DOWN" | "LEFT" | "RIGHT";
   color: string;
   isAlive: boolean;
@@ -125,7 +125,7 @@ export default function SnakeGame() {
     setPlayerId(newPlayerId);
     setPlayers([{
       id: newPlayerId, name: playerName, isReady: true,
-      snake: [{ x: 10, y: 10 }], direction: "RIGHT",
+      snake: [[10, 10]], direction: "RIGHT",
       color: "bg-green-500", isAlive: true, score: 0,
     }]);
     setFoods([{ x: 5, y: 5 }]);
@@ -164,7 +164,8 @@ export default function SnakeGame() {
         if (!player || !player.isAlive) return prevPlayers;
 
         const newSnake = [...player.snake];
-        const head = { ...newSnake[0] };
+        const currentHead = newSnake[0];
+        const head = { x: currentHead[0], y: currentHead[1] };
 
         switch (player.direction) {
           case "UP": head.y -= 1; break;
@@ -180,12 +181,12 @@ export default function SnakeGame() {
         }
 
         // Self collision
-        if (newSnake.some(segment => segment.x === head.x && segment.y === head.y)) {
+        if (newSnake.some(segment => segment[0] === head.x && segment[1] === head.y)) {
           setGameOver(true);
           return [{ ...player, isAlive: false }];
         }
 
-        newSnake.unshift(head);
+        newSnake.unshift([head.x, head.y]);
 
         // Food eating
         const foodIndex = foods.findIndex(f => f.x === head.x && f.y === head.y);
@@ -196,7 +197,7 @@ export default function SnakeGame() {
           let newFood: Position;
           do {
             newFood = { x: Math.floor(Math.random() * gridSize), y: Math.floor(Math.random() * gridSize) };
-          } while (newSnake.some(s => s.x === newFood.x && s.y === newFood.y));
+          } while (newSnake.some(s => s[0] === newFood.x && s[1] === newFood.y));
           setFoods([...newFoods, newFood]);
           // Don't pop tail to grow
         } else {
@@ -354,7 +355,7 @@ export default function SnakeGame() {
                 const isFood = foods.some(f => f.x === x && f.y === y);
                 let cellColor = "";
                 if (players[0] && players[0].isAlive) {
-                  if (players[0].snake.some(segment => segment.x === x && segment.y === y)) {
+                  if (players[0].snake.some(segment => segment[0] === x && segment[1] === y)) {
                     cellColor = players[0].color;
                   }
                 }
@@ -392,7 +393,7 @@ export default function SnakeGame() {
                 const isFood = foods.some(f => f.x === x && f.y === y);
                 let cellColor = "";
                 for (const player of players) {
-                  if (player.isAlive && player.snake.some(segment => segment.x === x && segment.y === y)) {
+                  if (player.isAlive && player.snake.some(segment => segment[0] === x && segment[1] === y)) {
                     cellColor = player.color;
                     break;
                   }
