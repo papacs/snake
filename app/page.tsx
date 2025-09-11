@@ -38,7 +38,7 @@ export default function SnakeGame() {
   // Game state
   const [gridSize, setGridSize] = useState(15);
   const CELL_SIZE = 20;
-  const GAME_SPEED = 300; // Sync with server
+  const GAME_SPEED = 800; // Sync with server
 
   const [playerName, setPlayerName] = useState("");
   const [gameStarted, setGameStarted] = useState(false);
@@ -115,7 +115,7 @@ export default function SnakeGame() {
         }
 
         // Damping factor - how quickly the rendered snake catches up to the server snake
-        const dampingFactor = 0.3;
+        const dampingFactor = 0.1;
 
         return currentRendered.map(renderedPlayer => {
           const serverPlayer = serverPlayers.find(p => p.id === renderedPlayer.id);
