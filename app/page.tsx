@@ -31,7 +31,7 @@ export default function SnakeGame() {
   const [joinRoomId, setJoinRoomId] = useState("");
 
   // Game state
-  const [gridSize, setGridSize] = useState(20);
+  const [gridSize, setGridSize] = useState(15);
   const CELL_SIZE = 20;
 
   const [playerName, setPlayerName] = useState("");
