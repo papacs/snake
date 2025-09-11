@@ -49,7 +49,7 @@ export default function SnakeGame() {
     console.log("Attempting to connect to socket server at:", process.env.NEXT_PUBLIC_SOCKET_URL);
     // ------------------
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
-    socket = io(socketUrl);
+    socket = io(socketUrl, { transports: ['websocket'] });
 
     socket.on("connect", () => console.log(`已连接到服务器: ${socketUrl}`));
     socket.on('roomCreated', ({ roomId, playerId, isOwner }) => {
