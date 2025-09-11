@@ -1,0 +1,20 @@
+{
+  "name": "snake-server",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "ts-node-dev --respawn --transpile-only server.ts"
+  },
+  "dependencies": {
+    "socket.io": "^4.8.1",
+    "uuid": "8.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/uuid": "8.3.4",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5"
+  }
+}

@@ -46,9 +46,10 @@ export default function SnakeGame() {
   const prevScores = useRef<Map<string, number>>(new Map());
 
   const socketInitializer = useCallback(() => {
-    socket = io("http://localhost:3001");
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
+    socket = io(socketUrl);
 
-    socket.on("connect", () => console.log("已连接到服务器"));
+    socket.on("connect", () => console.log(`已连接到服务器: ${socketUrl}`));
     socket.on('roomCreated', ({ roomId, playerId, isOwner }) => {
       setRoomId(roomId);
       setPlayerId(playerId);

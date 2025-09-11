@@ -4,7 +4,6 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "dev:socket": "ts-node-dev --project tsconfig.server.json --respawn --transpile-only server.ts",
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "eslint"
