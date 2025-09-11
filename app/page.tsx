@@ -27,12 +27,18 @@ export default function SnakeGame() {
   const [roomId, setRoomId] = useState("");
   const [playerId, setPlayerId] = useState("");
   const [isOwner, setIsOwner] = useState(false);
-  const [players, setPlayers] = useState<Player[]>([]);
-  const [joinRoomId, setJoinRoomId] = useState("");
-
+  
+  // --- State Refactoring for Interpolation ---
+  // Authoritative state from the server
+  const [serverPlayers, setServerPlayers] = useState<Player[]>([]);
+  // State that is actually rendered on screen
+  const [renderedPlayers, setRenderedPlayers] = useState<Player[]>([]);
+  const joinRoomIdRef = useRef(""); // Use ref for join room id to avoid re-renders
+  
   // Game state
   const [gridSize, setGridSize] = useState(15);
   const CELL_SIZE = 20;
+  const GAME_SPEED = 150; // Sync with server
 
   const [playerName, setPlayerName] = useState("");
   const [gameStarted, setGameStarted] = useState(false);
@@ -45,9 +51,6 @@ export default function SnakeGame() {
   const prevScores = useRef<Map<string, number>>(new Map());
 
   const socketInitializer = useCallback(() => {
-    // --- DEBUG LINE ---
-    console.log("Attempting to connect to socket server at:", process.env.NEXT_PUBLIC_SOCKET_URL);
-    // ------------------
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
     socket = io(socketUrl, { transports: ['websocket'] });
 
@@ -62,17 +65,29 @@ export default function SnakeGame() {
       setPlayerId(playerId);
       setIsOwner(isOwner);
     });
-    socket.on('updatePlayers', (updatedPlayers: Player[]) => setPlayers(updatedPlayers));
+    socket.on('updatePlayers', (updatedPlayers: Player[]) => {
+      setServerPlayers(updatedPlayers);
+      setRenderedPlayers(currentRendered => {
+        // Add new players to rendered state immediately
+        const newPlayers = updatedPlayers.filter(p => !currentRendered.some(rp => rp.id === p.id));
+        // Remove players who left
+        const activePlayers = currentRendered.filter(rp => updatedPlayers.some(p => p.id === rp.id));
+        return [...activePlayers, ...newPlayers];
+      });
+    });
     socket.on('gameStarted', (initialGameState) => {
       setGameOver(false);
       setWinner(null);
       setGameStarted(true);
       if (initialGameState.gridSize) setGridSize(initialGameState.gridSize);
-      if (initialGameState.players) setPlayers(initialGameState.players);
+      if (initialGameState.players) {
+        setServerPlayers(initialGameState.players);
+        setRenderedPlayers(initialGameState.players); // Snap to initial position
+      }
       if (initialGameState.foods) setFoods(initialGameState.foods);
     });
     socket.on('gameState', ({ players, foods, gridSize }) => {
-      setPlayers(players);
+      setServerPlayers(players); // ONLY update server state
       setFoods(foods);
       if (gridSize) setGridSize(gridSize);
     });
@@ -88,6 +103,50 @@ export default function SnakeGame() {
     });
     socket.on('error', (message) => alert(message));
   }, []);
+
+  // --- Interpolation/Smoothing Loop ---
+  useEffect(() => {
+    const animationFrameId = requestAnimationFrame(renderLoop);
+    
+    function renderLoop() {
+      setRenderedPlayers(currentRendered => {
+        if (serverPlayers.length === 0 && currentRendered.length === 0) {
+          return [];
+        }
+
+        // Damping factor - how quickly the rendered snake catches up to the server snake
+        const dampingFactor = 0.3;
+
+        return currentRendered.map(renderedPlayer => {
+          const serverPlayer = serverPlayers.find(p => p.id === renderedPlayer.id);
+          if (!serverPlayer) return renderedPlayer; // Player might have left, keep old state for a moment
+
+          // Smooth the snake
+          const newSnake = renderedPlayer.snake.map((segment, i) => {
+            const serverSegment = serverPlayer.snake[i];
+            if (!serverSegment) return segment; // Snake length might have changed
+
+            const newX = segment[0] + (serverSegment[0] - segment[0]) * dampingFactor;
+            const newY = segment[1] + (serverSegment[1] - segment[1]) * dampingFactor;
+            return [newX, newY];
+          });
+
+          // Handle snake growth/shrinkage
+          if (newSnake.length < serverPlayer.snake.length) {
+            newSnake.push(serverPlayer.snake[newSnake.length]);
+          } else if (newSnake.length > serverPlayer.snake.length) {
+            newSnake.pop();
+          }
+
+          return { ...serverPlayer, snake: newSnake };
+        });
+      });
+      requestAnimationFrame(renderLoop);
+    }
+
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [serverPlayers]);
+
 
   useEffect(() => {
     if (multiplayerMode && playerName) {
@@ -105,14 +164,14 @@ export default function SnakeGame() {
         return;
     };
     
-    players.forEach(player => {
+    serverPlayers.forEach(player => {
         const oldScore = prevScores.current.get(player.id) ?? 0;
         if (player.score > oldScore) {
             eatSoundRef.current?.play().catch(err => console.error("音效播放失败:", err));
         }
         prevScores.current.set(player.id, player.score);
     });
-  }, [players, gameStarted]);
+  }, [serverPlayers, gameStarted]);
   
   const resetGame = useCallback(() => {
     if (multiplayerMode && isOwner) {
@@ -123,11 +182,13 @@ export default function SnakeGame() {
   const startSinglePlayer = () => {
     const newPlayerId = uuidv4();
     setPlayerId(newPlayerId);
-    setPlayers([{
+    const startPlayer = {
       id: newPlayerId, name: playerName, isReady: true,
       snake: [[10, 10]], direction: "RIGHT",
       color: "bg-green-500", isAlive: true, score: 0,
-    }]);
+    };
+    setServerPlayers([startPlayer]);
+    setRenderedPlayers([startPlayer]);
     setFoods([{ x: 5, y: 5 }]);
     setGameOver(false);
     setGameStarted(true);
@@ -141,7 +202,7 @@ export default function SnakeGame() {
         socket.emit('changeDirection', { roomId, direction: newDirection });
       }
     } else {
-      setPlayers(prevPlayers => {
+      setServerPlayers(prevPlayers => {
         const player = prevPlayers[0];
         if (!player) return prevPlayers;
         const currentDirection = player.direction;
@@ -159,7 +220,7 @@ export default function SnakeGame() {
     if (!gameStarted || multiplayerMode) return;
 
     const moveSnake = () => {
-      setPlayers(prevPlayers => {
+      setServerPlayers(prevPlayers => {
         const player = prevPlayers[0];
         if (!player || !player.isAlive) return prevPlayers;
 
@@ -208,7 +269,7 @@ export default function SnakeGame() {
       });
     };
 
-    const gameLoop = setInterval(moveSnake, 200);
+    const gameLoop = setInterval(moveSnake, GAME_SPEED);
     return () => clearInterval(gameLoop);
   }, [gameStarted, multiplayerMode, foods, gridSize]);
 
@@ -233,13 +294,14 @@ export default function SnakeGame() {
 
   const createRoom = () => socket.emit('createRoom', { playerName, gridSize });
   const joinRoom = () => {
-    if (!joinRoomId.trim()) return;
-    socket.emit('joinRoom', { roomId: joinRoomId, playerName });
+    const roomIdToJoin = joinRoomIdRef.current;
+    if (!roomIdToJoin.trim()) return;
+    socket.emit('joinRoom', { roomId: roomIdToJoin, playerName });
   };
   const readyUp = () => socket.emit('playerReady', { roomId });
   const startGame = () => socket.emit('startGame', { roomId });
 
-  const currentPlayer = players.find(p => p.id === playerId);
+  const currentPlayer = serverPlayers.find(p => p.id === playerId);
   const score = currentPlayer ? currentPlayer.score : 0;
 
   const DirectionalControls = () => (
@@ -323,12 +385,11 @@ export default function SnakeGame() {
           <div className="flex gap-2">
             <input
               type="text"
-              value={joinRoomId}
-              onChange={(e) => setJoinRoomId(e.target.value)}
+              onChange={(e) => joinRoomIdRef.current = e.target.value}
               placeholder="输入房间号"
               className="px-4 py-2 border rounded"
             />
-            <button onClick={joinRoom} disabled={!joinRoomId.trim()} className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400">
+            <button onClick={joinRoom} className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
               加入房间
             </button>
           </div>
@@ -354,9 +415,9 @@ export default function SnakeGame() {
                 const y = Math.floor(index / gridSize);
                 const isFood = foods.some(f => f.x === x && f.y === y);
                 let cellColor = "";
-                if (players[0] && players[0].isAlive) {
-                  if (players[0].snake.some(segment => segment[0] === x && segment[1] === y)) {
-                    cellColor = players[0].color;
+                if (renderedPlayers[0] && renderedPlayers[0].isAlive) {
+                  if (renderedPlayers[0].snake.some(segment => Math.round(segment[0]) === x && Math.round(segment[1]) === y)) {
+                    cellColor = renderedPlayers[0].color;
                   }
                 }
                 if (isFood) cellColor = "bg-red-500";
@@ -392,8 +453,8 @@ export default function SnakeGame() {
                 const y = Math.floor(index / gridSize);
                 const isFood = foods.some(f => f.x === x && f.y === y);
                 let cellColor = "";
-                for (const player of players) {
-                  if (player.isAlive && player.snake.some(segment => segment[0] === x && segment[1] === y)) {
+                for (const player of renderedPlayers) {
+                  if (player.isAlive && player.snake.some(segment => Math.round(segment[0]) === x && Math.round(segment[1]) === y)) {
                     cellColor = player.color;
                     break;
                   }
@@ -410,15 +471,15 @@ export default function SnakeGame() {
                 再玩一局
               </button>
             ) : gameStarted ? (
-              <PlayerList players={players} currentPlayerId={playerId} />
+              <PlayerList players={serverPlayers} currentPlayerId={playerId} />
             ) : (
               <div className="flex flex-col items-center gap-4 mt-4">
-                <PlayerList players={players} currentPlayerId={playerId} />
+                <PlayerList players={serverPlayers} currentPlayerId={playerId} />
                 <button onClick={readyUp} className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600">
-                  {players.find(p => p.id === playerId)?.isReady ? '取消准备' : '准备'}
+                  {serverPlayers.find(p => p.id === playerId)?.isReady ? '取消准备' : '准备'}
                 </button>
                 {isOwner && (
-                  <button onClick={startGame} disabled={!players.every(p => p.isReady)} className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-400">
+                  <button onClick={startGame} disabled={!serverPlayers.every(p => p.isReady)} className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-400">
                     开始游戏
                   </button>
                 )}
