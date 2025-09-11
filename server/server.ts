@@ -230,10 +230,12 @@ io.on('connection', (socket) => {
 
   socket.on('playerReady', ({ roomId }) => {
     const room = rooms.get(roomId);
-    const player = room?.players.get(socket.id);
-    if (player) {
-      player.isReady = !player.isReady;
-      io.to(roomId).emit('updatePlayers', Array.from(room.players.values()));
+    if (room) {
+      const player = room.players.get(socket.id);
+      if (player) {
+        player.isReady = !player.isReady;
+        io.to(roomId).emit('updatePlayers', Array.from(room.players.values()));
+      }
     }
   });
 
