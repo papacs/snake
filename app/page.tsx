@@ -38,7 +38,7 @@ export default function SnakeGame() {
   // Game state
   const [gridSize, setGridSize] = useState(15);
   const CELL_SIZE = 20;
-  const GAME_SPEED = 150; // Sync with server
+  const GAME_SPEED = 300; // Sync with server
 
   const [playerName, setPlayerName] = useState("");
   const [gameStarted, setGameStarted] = useState(false);
@@ -182,7 +182,7 @@ export default function SnakeGame() {
   const startSinglePlayer = () => {
     const newPlayerId = uuidv4();
     setPlayerId(newPlayerId);
-    const startPlayer = {
+    const startPlayer: Player = {
       id: newPlayerId, name: playerName, isReady: true,
       snake: [[10, 10]], direction: "RIGHT",
       color: "bg-green-500", isAlive: true, score: 0,
@@ -196,7 +196,7 @@ export default function SnakeGame() {
     setMultiplayerMode(false);
   };
 
-  const changeDirection = (newDirection: "UP" | "DOWN" | "LEFT" | "RIGHT") => {
+  const changeDirection = useCallback((newDirection: "UP" | "DOWN" | "LEFT" | "RIGHT") => {
     if (multiplayerMode) {
       if (socket && roomId) {
         socket.emit('changeDirection', { roomId, direction: newDirection });
@@ -213,7 +213,7 @@ export default function SnakeGame() {
         return prevPlayers;
       });
     }
-  };
+  }, [multiplayerMode, roomId]);
 
   // Single Player Game Loop
   useEffect(() => {
