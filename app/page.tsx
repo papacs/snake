@@ -45,6 +45,9 @@ export default function SnakeGame() {
   const prevScores = useRef<Map<string, number>>(new Map());
 
   const socketInitializer = useCallback(() => {
+    // --- DEBUG LINE ---
+    console.log("Attempting to connect to socket server at:", process.env.NEXT_PUBLIC_SOCKET_URL);
+    // ------------------
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
     socket = io(socketUrl);
 
