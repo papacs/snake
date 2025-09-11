@@ -6,7 +6,7 @@ const pool = new Pool({
   connectionString,
 });
 
-export const query = (text: string, params?: any[]) => pool.query(text, params);
+export const query = (text: string, params?: (string | number | boolean | null)[]) => pool.query(text, params);
 
 export const createPlayerScoreTable = async () => {
   await query(`

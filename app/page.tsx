@@ -39,7 +39,6 @@ export default function SnakeGame() {
   const [foods, setFoods] = useState<Position[]>([]);
   const [gameOver, setGameOver] = useState(false);
   const [winner, setWinner] = useState<Player | null>(null);
-  const [isMobile, setIsMobile] = useState(false);
   
   // Sound effect ref
   const eatSoundRef = useRef<HTMLAudioElement>(null);
@@ -95,11 +94,6 @@ export default function SnakeGame() {
       if (socket) socket.disconnect();
     };
   }, [multiplayerMode, playerName, socketInitializer]);
-
-  useEffect(() => {
-    const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    setIsMobile(isMobileDevice);
-  }, []);
 
   // Sound effect trigger
   useEffect(() => {
@@ -212,7 +206,7 @@ export default function SnakeGame() {
 
     const gameLoop = setInterval(moveSnake, 200);
     return () => clearInterval(gameLoop);
-  }, [gameStarted, multiplayerMode, foods]);
+  }, [gameStarted, multiplayerMode, foods, gridSize]);
 
 
   useEffect(() => {
@@ -231,7 +225,7 @@ export default function SnakeGame() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [roomId, multiplayerMode]);
+  }, [roomId, multiplayerMode, changeDirection]);
 
   const createRoom = () => socket.emit('createRoom', { playerName, gridSize });
   const joinRoom = () => {
