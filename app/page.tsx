@@ -121,22 +121,25 @@ export default function SnakeGame() {
           const serverPlayer = serverPlayers.find(p => p.id === renderedPlayer.id);
           if (!serverPlayer) return renderedPlayer; // Player might have left, keep old state for a moment
 
-          // Smooth the snake
-          const newSnake = renderedPlayer.snake.map((segment, i) => {
-            const serverSegment = serverPlayer.snake[i];
-            if (!serverSegment) return segment; // Snake length might have changed
+          const serverSnake = serverPlayer.snake;
+          const renderedSnake = renderedPlayer.snake;
+
+          // If snake length changes (e.g., eating food), snap directly to the server state
+          // to avoid visual glitches from complex interpolation during growth.
+          if (serverSnake.length !== renderedSnake.length) {
+            return { ...serverPlayer, snake: serverSnake };
+          }
+
+          // Smooth the snake if length is consistent
+          const newSnake = renderedSnake.map((segment, i) => {
+            const serverSegment = serverSnake[i];
+            // This check is safe because we've already confirmed lengths are equal
+            if (!serverSegment) return segment;
 
             const newX = segment[0] + (serverSegment[0] - segment[0]) * dampingFactor;
             const newY = segment[1] + (serverSegment[1] - segment[1]) * dampingFactor;
             return [newX, newY];
           });
-
-          // Handle snake growth/shrinkage
-          if (newSnake.length < serverPlayer.snake.length) {
-            newSnake.push(serverPlayer.snake[newSnake.length]);
-          } else if (newSnake.length > serverPlayer.snake.length) {
-            newSnake.pop();
-          }
 
           return { ...serverPlayer, snake: newSnake };
         });
