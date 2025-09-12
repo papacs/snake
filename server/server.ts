@@ -38,7 +38,7 @@ type Room = {
 };
 
 const rooms = new Map<string, Room>();
-const GAME_SPEED = 800;
+const GAME_SPEED = 500;
 
 const colors = ["bg-green-500", "bg-blue-500", "bg-yellow-500", "bg-purple-500"];
 
