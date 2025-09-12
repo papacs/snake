@@ -2,6 +2,20 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
 
+// 生成6位随机数字的房间号
+function generateRoomId(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+// 生成唯一的6位数字房间号
+function generateUniqueRoomId(): string {
+  let roomId: string;
+  do {
+    roomId = generateRoomId();
+  } while (rooms.has(roomId)); // 确保房间号唯一
+  return roomId;
+}
+
 const httpServer = createServer();
 const io = new Server(httpServer, {
   cors: {
@@ -178,7 +192,7 @@ io.on('connection', (socket) => {
   console.log(`User connected: ${socket.id}`);
 
   socket.on('createRoom', ({ playerName, gridSize }) => {
-    const roomId = uuidv4().substring(0, 6);
+    const roomId = generateUniqueRoomId(); // 6位数字房间号
     const playerId = socket.id;
     const newPlayer: Player = {
       id: playerId,

@@ -1,6 +1,20 @@
 import { NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 
+// 生成6位随机数字的房间号
+function generateRoomId(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+// 生成唯一的6位数字房间号
+function generateUniqueRoomId(): string {
+  let roomId: string;
+  do {
+    roomId = generateRoomId();
+  } while (rooms.has(roomId)); // 确保房间号唯一
+  return roomId;
+}
+
 type Player = {
   playerId: string;
   playerName: string;
@@ -23,7 +37,7 @@ export async function POST(request: Request) {
 
     switch (action) {
       case 'create': {
-        const newRoomId = uuidv4().substring(0, 6); // Shorter room ID
+        const newRoomId = generateUniqueRoomId(); // 6位数字房间号
         const newPlayerId = uuidv4();
         const owner: Player = { playerId: newPlayerId, playerName, isReady: false };
         
