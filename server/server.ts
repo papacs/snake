@@ -262,8 +262,13 @@ io.on('connection', (socket) => {
       const allSnakes = Array.from(room.players.values()).map(p => p.snake);
       room.foods = [generateFood([], allSnakes, room.gridSize)];
       
+      const playersForClient = Array.from(room.players.values()).map(p => ({
+        ...p,
+        snake: p.snake.map(s => [s.x, s.y])
+      }));
+
       io.to(roomId).emit('gameStarted', { 
-        players: Array.from(room.players.values()),
+        players: playersForClient,
         foods: room.foods,
         gridSize: room.gridSize 
       });
