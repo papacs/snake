@@ -7,8 +7,7 @@ const io = new Server(httpServer, {
   cors: {
     origin: "*", // Allow all origins, will be configured in production
     methods: ["GET", "POST"]
-  },
-  transports: ['websocket']
+  }
 });
 
 type Position = {
@@ -38,7 +37,7 @@ type Room = {
 };
 
 const rooms = new Map<string, Room>();
-const GAME_SPEED = 200;
+const GAME_SPEED = 300;
 
 const colors = ["bg-green-500", "bg-blue-500", "bg-yellow-500", "bg-purple-500"];
 
@@ -55,13 +54,6 @@ function generateFood(currentFoods: Position[], allSnakes: Position[][], gridSiz
     flatSnakes.some(s => s.x === newFood.x && s.y === newFood.y)
   );
   return newFood;
-}
-
-function getPlayersForClient(room: Room) {
-  return Array.from(room.players.values()).map(p => ({
-    ...p,
-    snake: p.snake.map(s => [s.x, s.y])
-  }));
 }
 
 function startGameLoop(roomId: string) {
@@ -175,7 +167,7 @@ function startGameLoop(roomId: string) {
 
 
     io.to(roomId).emit('gameState', {
-      players: getPlayersForClient(room),
+      players: Array.from(room.players.values()),
       foods: room.foods,
       gridSize: room.gridSize,
     });
@@ -205,12 +197,12 @@ io.on('connection', (socket) => {
       gameStarted: false,
       gameLoop: null,
       ownerId: playerId,
-      gridSize: gridSize || 15,
+      gridSize: gridSize || 20,
     };
     rooms.set(roomId, room);
     socket.join(roomId);
     socket.emit('roomCreated', { roomId, playerId, isOwner: true });
-    io.to(roomId).emit('updatePlayers', getPlayersForClient(room));
+    io.to(roomId).emit('updatePlayers', Array.from(room.players.values()));
   });
 
   socket.on('joinRoom', ({ roomId, playerName }) => {
@@ -230,7 +222,7 @@ io.on('connection', (socket) => {
       room.players.set(playerId, newPlayer);
       socket.join(roomId);
       socket.emit('joinedRoom', { roomId, playerId, isOwner: false });
-      io.to(roomId).emit('updatePlayers', getPlayersForClient(room));
+      io.to(roomId).emit('updatePlayers', Array.from(room.players.values()));
     } else {
       socket.emit('error', 'Room not found or is full');
     }
@@ -242,7 +234,7 @@ io.on('connection', (socket) => {
       const player = room.players.get(socket.id);
       if (player) {
         player.isReady = !player.isReady;
-        io.to(roomId).emit('updatePlayers', getPlayersForClient(room));
+        io.to(roomId).emit('updatePlayers', Array.from(room.players.values()));
       }
     }
   });
@@ -265,7 +257,7 @@ io.on('connection', (socket) => {
       room.foods = [generateFood([], allSnakes, room.gridSize)];
       
       io.to(roomId).emit('gameStarted', { 
-        players: getPlayersForClient(room),
+        players: Array.from(room.players.values()),
         foods: room.foods,
         gridSize: room.gridSize 
       });
@@ -299,7 +291,7 @@ io.on('connection', (socket) => {
             p.snake = [];
         });
         io.to(roomId).emit('gameReset');
-        io.to(roomId).emit('updatePlayers', getPlayersForClient(room));
+        io.to(roomId).emit('updatePlayers', Array.from(room.players.values()));
     }
   });
 
@@ -315,7 +307,7 @@ io.on('connection', (socket) => {
           if (room.ownerId === socket.id) {
             room.ownerId = Array.from(room.players.keys())[0];
           }
-          io.to(roomId).emit('updatePlayers', getPlayersForClient(room));
+          io.to(roomId).emit('updatePlayers', Array.from(room.players.values()));
         }
       }
     });
