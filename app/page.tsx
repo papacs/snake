@@ -115,7 +115,7 @@ export default function SnakeGame() {
         }
 
         // Damping factor - how quickly the rendered snake catches up to the server snake
-        const dampingFactor = 0.1;
+        const dampingFactor = 0.3;
 
         return currentRendered.map(renderedPlayer => {
           const serverPlayer = serverPlayers.find(p => p.id === renderedPlayer.id);
@@ -196,7 +196,7 @@ export default function SnakeGame() {
     setMultiplayerMode(false);
   };
 
-  const changeDirection = useCallback((newDirection: "UP" | "DOWN" | "LEFT" | "RIGHT") => {
+  const changeDirection = (newDirection: "UP" | "DOWN" | "LEFT" | "RIGHT") => {
     if (multiplayerMode) {
       if (socket && roomId) {
         socket.emit('changeDirection', { roomId, direction: newDirection });
@@ -213,7 +213,7 @@ export default function SnakeGame() {
         return prevPlayers;
       });
     }
-  }, [multiplayerMode, roomId]);
+  };
 
   // Single Player Game Loop
   useEffect(() => {
