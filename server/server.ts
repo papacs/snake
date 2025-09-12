@@ -197,7 +197,7 @@ io.on('connection', (socket) => {
       gameStarted: false,
       gameLoop: null,
       ownerId: playerId,
-      gridSize: gridSize || 20,
+      gridSize: gridSize || 17,
     };
     rooms.set(roomId, room);
     socket.join(roomId);
