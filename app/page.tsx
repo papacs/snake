@@ -44,6 +44,16 @@ export default function SnakeGame() {
   const eatSoundRef = useRef<HTMLAudioElement>(null);
   const prevScores = useRef<Map<string, number>>(new Map());
 
+  const getDirectionalIcon = (direction: "UP" | "DOWN" | "LEFT" | "RIGHT") => {
+    switch (direction) {
+      case "UP": return "↑";
+      case "DOWN": return "↓";
+      case "LEFT": return "←";
+      case "RIGHT": return "→";
+      default: return "";
+    }
+  };
+
   const socketInitializer = useCallback(() => {
     // --- DEBUG LINE ---
     console.log("Attempting to connect to socket server at:", process.env.NEXT_PUBLIC_SOCKET_URL);
@@ -336,19 +346,31 @@ export default function SnakeGame() {
               className="grid bg-white border border-gray-300"
               style={{ gridTemplateColumns: `repeat(${gridSize}, ${CELL_SIZE}px)`, gridTemplateRows: `repeat(${gridSize}, ${CELL_SIZE}px)` }}
             >
-              {Array.from({ length: gridSize * gridSize }).map((_, index) => {
-                const x = index % gridSize;
-                const y = Math.floor(index / gridSize);
-                const isFood = foods.some(f => f.x === x && f.y === y);
-                let cellColor = "";
-                if (players[0] && players[0].isAlive) {
-                  if (players[0].snake.some(segment => segment.x === x && segment.y === y)) {
-                    cellColor = players[0].color;
-                  }
+            {Array.from({ length: gridSize * gridSize }).map((_, index) => {
+              const x = index % gridSize;
+              const y = Math.floor(index / gridSize);
+              const isFood = foods.some(f => f.x === x && f.y === y);
+              let cellColor = "";
+              let headIcon = null;
+              if (players[0] && players[0].isAlive) {
+                const snake = players[0].snake;
+                if (snake.length > 0 && snake[0].x === x && snake[0].y === y) {
+                  headIcon = getDirectionalIcon(players[0].direction);
+                  cellColor = players[0].color;
+                } else if (snake.some(segment => segment.x === x && segment.y === y)) {
+                  cellColor = players[0].color;
                 }
-                if (isFood) cellColor = "bg-red-500";
-                return <div key={index} className={`w-full h-full border border-gray-100 ${cellColor}`} />;
-              })}
+              }
+              if (isFood) {
+                cellColor = "bg-red-500";
+                headIcon = null;
+              }
+              return (
+                <div key={index} className={`w-full h-full border border-gray-100 ${cellColor} flex items-center justify-center`}>
+                  {headIcon && <span className="text-white font-bold">{headIcon}</span>}
+                </div>
+              );
+            })}
             </div>
           </div>
           <button onClick={startSinglePlayer} className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
@@ -374,20 +396,37 @@ export default function SnakeGame() {
               className="grid bg-white border border-gray-300"
               style={{ gridTemplateColumns: `repeat(${gridSize}, ${CELL_SIZE}px)`, gridTemplateRows: `repeat(${gridSize}, ${CELL_SIZE}px)` }}
             >
-              {Array.from({ length: gridSize * gridSize }).map((_, index) => {
-                const x = index % gridSize;
-                const y = Math.floor(index / gridSize);
-                const isFood = foods.some(f => f.x === x && f.y === y);
-                let cellColor = "";
-                for (const player of players) {
-                  if (player.isAlive && player.snake.some(segment => segment.x === x && segment.y === y)) {
+            {Array.from({ length: gridSize * gridSize }).map((_, index) => {
+              const x = index % gridSize;
+              const y = Math.floor(index / gridSize);
+              const isFood = foods.some(f => f.x === x && f.y === y);
+              let cellColor = "";
+              let headIcon = null;
+              
+              for (const player of players) {
+                if (player.isAlive) {
+                  const snake = player.snake;
+                  if (snake.length > 0 && snake[0].x === x && snake[0].y === y) {
+                    headIcon = getDirectionalIcon(player.direction);
                     cellColor = player.color;
                     break;
+                  } else if (snake.some(segment => segment.x === x && segment.y === y)) {
+                    cellColor = player.color;
                   }
                 }
-                if (isFood) cellColor = "bg-red-500";
-                return <div key={index} className={`w-full h-full border border-gray-100 ${cellColor}`} />;
-              })}
+              }
+              
+              if (isFood) {
+                cellColor = "bg-red-500";
+                headIcon = null;
+              }
+              
+              return (
+                <div key={index} className={`w-full h-full border border-gray-100 ${cellColor} flex items-center justify-center`}>
+                  {headIcon && <span className="text-white font-bold">{headIcon}</span>}
+                </div>
+              );
+            })}
             </div>
           </div>
           {gameStarted && <DirectionalControls />}

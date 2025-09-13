@@ -48,6 +48,7 @@ type Room = {
   gameLoop: NodeJS.Timeout | null;
   ownerId: string;
   gridSize: number;
+  usedColors: Set<number>; // Track which color indices are in use
 };
 
 const rooms = new Map<string, Room>();
@@ -68,6 +69,52 @@ function generateFood(currentFoods: Position[], allSnakes: Position[][], gridSiz
     flatSnakes.some(s => s.x === newFood.x && s.y === newFood.y)
   );
   return newFood;
+}
+
+function generateRandomPosition(gridSize: number, existingPositions: Position[], minDistance: number = 3): Position {
+  let newPosition: Position;
+  let attempts = 0;
+  const maxAttempts = 100; // 防止无限循环
+  
+  do {
+    newPosition = {
+      x: Math.floor(Math.random() * gridSize),
+      y: Math.floor(Math.random() * gridSize),
+    };
+    attempts++;
+    
+    // 检查是否与现有位置太近
+    const tooClose = existingPositions.some(pos => {
+      const dx = Math.abs(pos.x - newPosition.x);
+      const dy = Math.abs(pos.y - newPosition.y);
+      return dx < minDistance && dy < minDistance;
+    });
+    
+    // 如果尝试次数过多或者位置合适，就返回
+    if (attempts >= maxAttempts || !tooClose) {
+      break;
+    }
+  } while (true);
+  
+  return newPosition;
+}
+
+// 获取唯一的颜色索引
+function getUniqueColorIndex(usedColors: Set<number>): number {
+  // 尝试找到未使用的颜色索引
+  for (let i = 0; i < colors.length; i++) {
+    if (!usedColors.has(i)) {
+      return i;
+    }
+  }
+  
+  // 如果所有颜色都被使用，随机选择一个（虽然不应该发生，因为有4个颜色和最多4个玩家）
+  return Math.floor(Math.random() * colors.length);
+}
+
+// 从颜色字符串获取颜色索引
+function getColorIndexFromColor(color: string): number {
+  return colors.indexOf(color);
 }
 
 function startGameLoop(roomId: string) {
@@ -212,6 +259,7 @@ io.on('connection', (socket) => {
       gameLoop: null,
       ownerId: playerId,
       gridSize: gridSize || 17,
+      usedColors: new Set([0]), // First player uses color index 0
     };
     rooms.set(roomId, room);
     socket.join(roomId);
@@ -223,17 +271,19 @@ io.on('connection', (socket) => {
     const room = rooms.get(roomId);
     if (room && room.players.size < 4) {
       const playerId = socket.id;
+      const colorIndex = getUniqueColorIndex(room.usedColors);
       const newPlayer: Player = {
         id: playerId,
         name: playerName,
         isReady: false,
         snake: [],
         direction: 'RIGHT',
-        color: colors[room.players.size % colors.length],
+        color: colors[colorIndex],
         isAlive: false,
         score: 0,
       };
       room.players.set(playerId, newPlayer);
+      room.usedColors.add(colorIndex);
       socket.join(roomId);
       socket.emit('joinedRoom', { roomId, playerId, isOwner: false });
       io.to(roomId).emit('updatePlayers', Array.from(room.players.values()));
@@ -257,15 +307,16 @@ io.on('connection', (socket) => {
     const room = rooms.get(roomId);
     if (room && room.ownerId === socket.id && Array.from(room.players.values()).every(p => p.isReady)) {
       room.gameStarted = true;
-      // Initialize game state
-      let index = 0;
+      // Initialize game state with random positions that don't overlap
+      const existingPositions: Position[] = [];
       room.players.forEach(player => {
-        player.snake = [{ x: 10 + index * 2, y: 10 }];
+        const randomPosition = generateRandomPosition(room.gridSize, existingPositions, 3);
+        player.snake = [randomPosition];
         player.direction = 'RIGHT';
         player.isAlive = true;
         player.isReady = false; // Reset for next game
         player.score = 0;
-        index++;
+        existingPositions.push(randomPosition);
       });
       const allSnakes = Array.from(room.players.values()).map(p => p.snake);
       room.foods = [generateFood([], allSnakes, room.gridSize)];
@@ -313,6 +364,14 @@ io.on('connection', (socket) => {
     console.log(`User disconnected: ${socket.id}`);
     rooms.forEach((room, roomId) => {
       if (room && room.players.has(socket.id)) {
+        const disconnectedPlayer = room.players.get(socket.id);
+        if (disconnectedPlayer) {
+          // Release the color used by the disconnected player
+          const colorIndex = getColorIndexFromColor(disconnectedPlayer.color);
+          if (colorIndex !== -1) {
+            room.usedColors.delete(colorIndex);
+          }
+        }
         room.players.delete(socket.id);
         if (room.players.size === 0) {
           if (room.gameLoop) clearInterval(room.gameLoop);
