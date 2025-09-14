@@ -24,9 +24,34 @@ const io = new Server(httpServer, {
   }
 });
 
+// 食物类型定义
+const FOOD_TYPES = {
+    NORMAL: { id: 1, color: '#ff0000', score: 10, length: 1, lifetime: 15000, name: "普通食物" },
+    FREEZE: { id: 2, color: '#00aaff', score: 20, effect: 'freeze', duration: 3000, lifetime: 8000, name: "冰冻果实" },
+    SPEED: { id: 3, color: '#ff5500', score: 30, effect: 'speed', duration: 5000, speedMultiplier: 2, lifetime: 8000, name: "加速辣椒" },
+    SHRINK: { id: 4, color: '#aa00ff', score: 20, effect: 'shrink', value: 3, lifetime: 8000, name: "缩小蘑菇" },
+    RAINBOW: { id: 5, color: 'rainbow', score: 50, effect: 'random', lifetime: 7000, name: "彩虹糖果" },
+    TELEPORT: { id: 6, color: 'linear-gradient(45deg, #00ffaa, #00aaff)', score: 20, effect: 'teleport', lifetime: 7000, name: "传送门" },
+    GHOST: { id: 8, color: '#00ff00', score: 40, effect: 'ghost', duration: 6000, lifetime: 8000, name: "穿墙能力" },
+    INVINCIBLE: { id: 9, color: '#ffffff', score: 50, effect: 'invincible', duration: 5000, lifetime: 8000, name: "无敌状态" },
+    MAGNET: { id: 10, color: '#ff00ff', score: 30, effect: 'magnet', duration: 8000, lifetime: 8000, name: "磁铁" }
+} as const;
+
 type Position = {
   x: number;
   y: number;
+};
+
+type Effect = {
+    type: 'freeze' | 'speed' | 'ghost' | 'invincible' | 'magnet' | 'shrink' | 'grow' | 'teleport';
+    duration: number;
+    // 可选的额外信息
+    [key: string]: any; 
+};
+
+type Food = Position & {
+    type: typeof FOOD_TYPES[keyof typeof FOOD_TYPES];
+    spawnTime: number;
 };
 
 type Player = {
@@ -35,15 +60,18 @@ type Player = {
   isReady: boolean;
   snake: Position[];
   direction: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
+  nextDirection: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT'; // 用于更平滑的转向
   color: string;
   isAlive: boolean;
   score: number;
+  effects: Effect[];
+  speed: number; // 基础速度 (ticks per move)
 };
 
 type Room = {
   id: string;
   players: Map<string, Player>;
-  foods: Position[];
+  foods: Food[];
   gameStarted: boolean;
   gameLoop: NodeJS.Timeout | null;
   ownerId: string;
@@ -52,23 +80,43 @@ type Room = {
 };
 
 const rooms = new Map<string, Room>();
-const GAME_SPEED = 300;
+const GAME_SPEED = 250; // 稍微加快基础游戏速度
 
 const colors = ["bg-green-500", "bg-blue-500", "bg-yellow-500", "bg-purple-500"];
 
-function generateFood(currentFoods: Position[], allSnakes: Position[][], gridSize: number): Position {
-  let newFood: Position;
-  const flatSnakes = allSnakes.flat();
-  do {
-    newFood = {
-      x: Math.floor(Math.random() * gridSize),
-      y: Math.floor(Math.random() * gridSize),
+function generateFood(currentFoods: Food[], allSnakes: Position[][], gridSize: number): Food {
+    let newFoodPos: Position = { x: 0, y: 0 }; // Initialize to avoid TS error
+    const flatSnakes = allSnakes.flat();
+    let attempts = 0;
+
+    // 确保食物不会生成在蛇或现有食物上
+    while (attempts < 100) {
+        newFoodPos = {
+            x: Math.floor(Math.random() * gridSize),
+            y: Math.floor(Math.random() * gridSize),
+        };
+        const overlapping = currentFoods.some(f => f.x === newFoodPos.x && f.y === newFoodPos.y) ||
+                            flatSnakes.some(s => s.x === newFoodPos.x && s.y === newFoodPos.y);
+        if (!overlapping) break;
+        attempts++;
+    }
+
+    // 随机选择食物类型，增加普通食物的概率
+    const foodTypes = Object.values(FOOD_TYPES);
+    let foodType;
+    if (Math.random() < 0.4) {
+        foodType = FOOD_TYPES.NORMAL; // 40% 概率为普通食物
+    } else {
+        // 排除普通食物后的其他类型
+        const specialFoodTypes = foodTypes.filter(t => t.id !== 1);
+        foodType = specialFoodTypes[Math.floor(Math.random() * specialFoodTypes.length)];
+    }
+
+    return {
+        ...newFoodPos,
+        type: foodType,
+        spawnTime: Date.now(),
     };
-  } while (
-    currentFoods.some(f => f.x === newFood.x && f.y === newFood.y) ||
-    flatSnakes.some(s => s.x === newFood.x && s.y === newFood.y)
-  );
-  return newFood;
 }
 
 function generateRandomPosition(gridSize: number, existingPositions: Position[], minDistance: number = 3): Position {
@@ -117,122 +165,230 @@ function getColorIndexFromColor(color: string): number {
   return colors.indexOf(color);
 }
 
+function applyFoodEffect(player: Player, foodType: typeof FOOD_TYPES[keyof typeof FOOD_TYPES], room: Room) {
+    player.score += foodType.score;
+
+    // Type guard to ensure we are dealing with a special food
+    if (!('effect' in foodType)) { // This handles NORMAL food
+        player.snake.push({ ...player.snake[player.snake.length - 1] });
+        return;
+    }
+
+    // From here, TypeScript knows foodType has the 'effect' property and is not NORMAL
+    switch (foodType.effect) {
+        case 'freeze':
+            player.effects.push({ type: 'freeze', duration: foodType.duration });
+            break;
+        case 'speed':
+            player.speed = foodType.speedMultiplier;
+            player.effects.push({ type: 'speed', duration: foodType.duration, speedMultiplier: foodType.speedMultiplier });
+            break;
+        case 'shrink':
+            const shrinkAmount = Math.min(foodType.value, player.snake.length - 2);
+            if (shrinkAmount > 0) {
+                player.snake.splice(-shrinkAmount);
+            }
+            break;
+        case 'teleport':
+            const newPos = generateRandomPosition(room.gridSize, room.players.size > 1 ? Array.from(room.players.values()).flatMap(p => p.snake) : player.snake, 3);
+            player.snake = [newPos, {x: newPos.x - 1, y: newPos.y}];
+            break;
+        case 'ghost':
+            player.effects.push({ type: 'ghost', duration: foodType.duration });
+            break;
+        case 'invincible':
+            player.effects.push({ type: 'invincible', duration: foodType.duration });
+            break;
+        case 'magnet':
+            player.effects.push({ type: 'magnet', duration: foodType.duration });
+            break;
+        case 'random':
+            const randomEffects = Object.values(FOOD_TYPES).filter(f => 'effect' in f && f.effect !== 'random');
+            const randomFood = randomEffects[Math.floor(Math.random() * randomEffects.length)];
+            if (randomFood) {
+                 applyFoodEffect(player, randomFood, room); // Recursively apply a random effect
+            }
+            break;
+    }
+}
+
+
 function startGameLoop(roomId: string) {
     const room = rooms.get(roomId);
     if (!room || room.gameLoop) return;
 
-  room.gameLoop = setInterval(() => {
-    const room = rooms.get(roomId);
-    if (!room) return;
+    room.gameLoop = setInterval(() => {
+        const room = rooms.get(roomId);
+        if (!room) return;
 
-    let currentPlayers = Array.from(room.players.values());
-    let currentFoods = [...room.foods];
-    const nextHeads: { [playerId: string]: Position } = {};
+        const now = Date.now();
+        const players = Array.from(room.players.values());
+        
+        // 1. Update food lifetime and remove expired food
+        const initialFoodCount = room.foods.length;
+        room.foods = room.foods.filter(food => now - food.spawnTime < food.type.lifetime);
+        const expiredCount = initialFoodCount - room.foods.length;
+        if (expiredCount > 0) {
+            for (let i = 0; i < expiredCount; i++) {
+                const allSnakes = players.map(p => p.snake);
+                room.foods.push(generateFood(room.foods, allSnakes, room.gridSize));
+            }
+        }
 
-    // 1. Calculate next head position
-    currentPlayers.forEach(player => {
-      if (!player.isAlive) return;
-      const head = { ...player.snake[0] };
-      switch (player.direction) {
-        case "UP": head.y -= 1; break;
-        case "DOWN": head.y += 1; break;
-        case "LEFT": head.x -= 1; break;
-        case "RIGHT": head.x += 1; break;
-      }
-      nextHeads[player.id] = head;
-    });
+        // 2. Update player effects
+        players.forEach(player => {
+            player.effects = player.effects.filter(effect => {
+                effect.duration -= GAME_SPEED;
+                if (effect.duration <= 0) {
+                    if (effect.type === 'speed') player.speed = 1; // Reset speed
+                    return false;
+                }
+                return true;
+            });
+        });
 
-    const playersToKill = new Set<string>();
-    const lengthToAdd: { [playerId: string]: number } = {};
+        // 3. Handle Magnet Effect
+        players.forEach(player => {
+            if (player.effects.some(e => e.type === 'magnet')) {
+                const head = player.snake[0];
+                room.foods.forEach(food => {
+                    const dx = head.x - food.x;
+                    const dy = head.y - food.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance < 5 && distance > 0.1) { // Magnet radius
+                        food.x += Math.sign(dx) * 0.5;
+                        food.y += Math.sign(dy) * 0.5;
+                    }
+                });
+            }
+        });
 
-    // 2. Detect collisions
-    currentPlayers.forEach(player => {
-        if (!player.isAlive) return;
-        const head = nextHeads[player.id];
+        const nextPositions: { [id: string]: { head: Position, newSnake: Position[] } } = {};
+        const playersToKill = new Set<string>();
 
-        if (head.x < 0 || head.x >= room.gridSize || head.y < 0 || head.y >= room.gridSize) playersToKill.add(player.id);
-        if (player.snake.some(segment => segment.x === head.x && segment.y === head.y)) playersToKill.add(player.id);
+        // 4. Calculate next positions for all players
+        players.forEach(player => {
+            if (!player.isAlive) return;
 
-        currentPlayers.forEach(otherPlayer => {
-            if (!otherPlayer.isAlive) return;
-            if (otherPlayer.snake.some(segment => segment.x === head.x && segment.y === head.y)) playersToKill.add(player.id);
-            if (player.id !== otherPlayer.id && head.x === nextHeads[otherPlayer.id]?.x && head.y === nextHeads[otherPlayer.id]?.y) {
-                if (player.snake.length > otherPlayer.snake.length) {
-                    playersToKill.add(otherPlayer.id);
-                    lengthToAdd[player.id] = (lengthToAdd[player.id] || 0) + otherPlayer.snake.length;
-                } else if (player.snake.length < otherPlayer.snake.length) {
+            // Apply direction change
+            player.direction = player.nextDirection;
+
+            // Handle Freeze effect
+            if (player.effects.some(e => e.type === 'freeze')) {
+                nextPositions[player.id] = { head: player.snake[0], newSnake: player.snake };
+                return;
+            }
+
+            const head = { ...player.snake[0] };
+            switch (player.direction) {
+                case "UP": head.y -= 1; break;
+                case "DOWN": head.y += 1; break;
+                case "LEFT": head.x -= 1; break;
+                case "RIGHT": head.x += 1; break;
+            }
+            
+            // Handle Ghost effect (wall collision)
+            if (player.effects.some(e => e.type === 'ghost')) {
+                if (head.x < 0) head.x = room.gridSize - 1;
+                if (head.x >= room.gridSize) head.x = 0;
+                if (head.y < 0) head.y = room.gridSize - 1;
+                if (head.y >= room.gridSize) head.y = 0;
+            }
+
+            nextPositions[player.id] = { head, newSnake: [head, ...player.snake] };
+        });
+
+        // 5. Collision Detection
+        players.forEach(player => {
+            if (!player.isAlive) return;
+            const { head } = nextPositions[player.id];
+            const isInvincible = player.effects.some(e => e.type === 'invincible');
+            if (isInvincible) return;
+
+            // Wall collision (for non-ghost players)
+            if (!player.effects.some(e => e.type === 'ghost')) {
+                if (head.x < 0 || head.x >= room.gridSize || head.y < 0 || head.y >= room.gridSize) {
                     playersToKill.add(player.id);
-                    lengthToAdd[otherPlayer.id] = (lengthToAdd[otherPlayer.id] || 0) + player.snake.length;
-                } else {
+                }
+            }
+
+            // Self and other snake collision
+            for (const otherPlayer of players) {
+                if (!otherPlayer.isAlive) continue;
+                const targetSnake = (player.id === otherPlayer.id) ? otherPlayer.snake.slice(1) : otherPlayer.snake;
+                if (targetSnake.some(segment => segment.x === head.x && segment.y === head.y)) {
                     playersToKill.add(player.id);
-                    playersToKill.add(otherPlayer.id);
+                    break;
+                }
+            }
+            
+            // Head-on collision
+            for (const otherPlayer of players) {
+                if (player.id === otherPlayer.id || !otherPlayer.isAlive) continue;
+                const otherHead = nextPositions[otherPlayer.id]?.head;
+                if (head.x === otherHead?.x && head.y === otherHead?.y) {
+                    if (player.snake.length > otherPlayer.snake.length) {
+                        playersToKill.add(otherPlayer.id);
+                    } else if (player.snake.length < otherPlayer.snake.length) {
+                        playersToKill.add(player.id);
+                    } else {
+                        playersToKill.add(player.id);
+                        playersToKill.add(otherPlayer.id);
+                    }
                 }
             }
         });
-    });
 
-    // 3. Update players state
-    playersToKill.forEach(playerId => {
-        const player = room.players.get(playerId);
-        if (player) {
-            player.isAlive = false;
-            currentFoods.push(...player.snake);
+        // 6. Update player states (kill players)
+        playersToKill.forEach(playerId => {
+            const player = room.players.get(playerId);
+            if (player) {
+                player.isAlive = false;
+                const bodyFood: Food[] = player.snake.map(segment => ({
+                    ...segment, type: FOOD_TYPES.NORMAL, spawnTime: Date.now()
+                }));
+                room.foods.push(...bodyFood);
+            }
+        });
+
+        // 7. Update snake positions and handle food eating
+        players.forEach(player => {
+            if (!player.isAlive) return;
+            
+            const { head, newSnake } = nextPositions[player.id];
+            const foodIndex = room.foods.findIndex(f => Math.round(f.x) === head.x && Math.round(f.y) === head.y);
+
+            if (foodIndex !== -1) {
+                const eatenFood = room.foods.splice(foodIndex, 1)[0];
+                applyFoodEffect(player, eatenFood.type, room);
+                // Generate new food
+                const allSnakes = players.map(p => p.snake);
+                room.foods.push(generateFood(room.foods, allSnakes, room.gridSize));
+            } else if (!player.effects.some(e => e.type === 'freeze')) {
+                // Only pop the tail if the snake is not frozen and didn't eat
+                newSnake.pop();
+            }
+            player.snake = newSnake;
+        });
+
+        // 8. Check for game over: The game ends when no players are alive.
+        const alivePlayers = players.filter(p => p.isAlive);
+        if (alivePlayers.length === 0 && players.length > 0) {
+            if (room.gameLoop) clearInterval(room.gameLoop);
+            room.gameLoop = null;
+            room.gameStarted = false;
+            
+            // The winner is the player with the highest score.
+            const winner = players.sort((a, b) => b.score - a.score)[0];
+            io.to(roomId).emit('gameOver', winner);
         }
-    });
 
-    // 4. Update snake positions and handle food
-    let ateFood = false;
-    currentPlayers.forEach(player => {
-        if (!player.isAlive) return;
-        const head = nextHeads[player.id];
-        let newSnake = [head, ...player.snake];
-        let foodIndex = currentFoods.findIndex(f => f.x === head.x && f.y === head.y);
-
-        if (foodIndex !== -1) {
-            currentFoods.splice(foodIndex, 1);
-            ateFood = true;
-            player.score += 10;
-        } else {
-            newSnake.pop();
-        }
-
-        if (lengthToAdd[player.id]) {
-            const tail = newSnake[newSnake.length - 1];
-            for (let i = 0; i < lengthToAdd[player.id]; i++) newSnake.push({ ...tail });
-        }
-        player.snake = newSnake;
-    });
-
-    if (ateFood) {
-        const allSnakes = Array.from(room.players.values()).map(p => p.snake);
-        currentFoods.push(generateFood(currentFoods, allSnakes, room.gridSize));
-    }
-    room.foods = currentFoods;
-
-    // 5. Check for game over
-    const alivePlayers = Array.from(room.players.values()).filter(p => p.isAlive);
-    if (alivePlayers.length === 0 && room.players.size > 0) {
-        if (room.gameLoop) clearInterval(room.gameLoop);
-        room.gameLoop = null;
-        room.gameStarted = false; // Allow reset
-        
-        // Find the last player to die or the one with the highest score to declare a winner
-        let winner = null;
-        if (room.players.size === 1) {
-            winner = Array.from(room.players.values())[0];
-        } else if (room.players.size > 1) {
-            winner = Array.from(room.players.values()).sort((a, b) => b.score - a.score)[0];
-        }
-        io.to(roomId).emit('gameOver', winner);
-    }
-
-
-    io.to(roomId).emit('gameState', {
-      players: Array.from(room.players.values()),
-      foods: room.foods,
-      gridSize: room.gridSize,
-    });
-  }, GAME_SPEED);
+        io.to(roomId).emit('gameState', {
+            players: Array.from(room.players.values()),
+            foods: room.foods,
+            gridSize: room.gridSize,
+        });
+    }, GAME_SPEED);
 }
 
 io.on('connection', (socket) => {
@@ -247,9 +403,12 @@ io.on('connection', (socket) => {
       isReady: false,
       snake: [],
       direction: 'RIGHT',
+      nextDirection: 'RIGHT',
       color: colors[0],
       isAlive: false,
       score: 0,
+      effects: [],
+      speed: 1,
     };
     const room: Room = {
       id: roomId,
@@ -277,10 +436,13 @@ io.on('connection', (socket) => {
         name: playerName,
         isReady: false,
         snake: [],
-        direction: 'RIGHT',
-        color: colors[colorIndex],
-        isAlive: false,
-        score: 0,
+      direction: 'RIGHT',
+      nextDirection: 'RIGHT',
+      color: colors[colorIndex],
+      isAlive: false,
+      score: 0,
+      effects: [],
+      speed: 1,
       };
       room.players.set(playerId, newPlayer);
       room.usedColors.add(colorIndex);
@@ -311,11 +473,14 @@ io.on('connection', (socket) => {
       const existingPositions: Position[] = [];
       room.players.forEach(player => {
         const randomPosition = generateRandomPosition(room.gridSize, existingPositions, 3);
-        player.snake = [randomPosition];
+        player.snake = [randomPosition, { x: randomPosition.x - 1, y: randomPosition.y }];
         player.direction = 'RIGHT';
+        player.nextDirection = 'RIGHT';
         player.isAlive = true;
         player.isReady = false; // Reset for next game
         player.score = 0;
+        player.effects = [];
+        player.speed = 1;
         existingPositions.push(randomPosition);
       });
       const allSnakes = Array.from(room.players.values()).map(p => p.snake);
@@ -335,10 +500,11 @@ io.on('connection', (socket) => {
     const player = room?.players.get(socket.id);
     if (player && player.isAlive) {
         const currentDirection = player.direction;
-        if (direction === 'UP' && currentDirection !== 'DOWN') player.direction = direction;
-        if (direction === 'DOWN' && currentDirection !== 'UP') player.direction = direction;
-        if (direction === 'LEFT' && currentDirection !== 'RIGHT') player.direction = direction;
-        if (direction === 'RIGHT' && currentDirection !== 'LEFT') player.direction = direction;
+        // 避免180度直接转向
+        if (direction === 'UP' && currentDirection !== 'DOWN') player.nextDirection = direction;
+        if (direction === 'DOWN' && currentDirection !== 'UP') player.nextDirection = direction;
+        if (direction === 'LEFT' && currentDirection !== 'RIGHT') player.nextDirection = direction;
+        if (direction === 'RIGHT' && currentDirection !== 'LEFT') player.nextDirection = direction;
     }
   });
   

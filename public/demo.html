@@ -1210,49 +1210,8 @@
                     startBtn.textContent = "重新开始";
                     document.body.style.overflow = ''; // Restore scrolling
                     touchOverlay.style.display = 'none';
-                } else if (alivePlayers === 1 && Object.keys(players).length > 1) {
-                    gameRunning = false;
-                    statusDiv.textContent = `${lastAlivePlayer.name} 获胜！`;
-                    startBtn.textContent = "重新开始";
-                    document.body.style.overflow = ''; // Restore scrolling
-                    touchOverlay.style.display = 'none';
                 }
             }
-            
-            // 键盘控制
-            document.addEventListener('keydown', (e) => {
-                if (!gameRunning) return;
-                
-                const player = players['player1'];
-                if (!player.isAlive) return;
-                
-                // 检查是否有冻结效果
-                const freezeEffect = player.effects.find(effect => effect.type === 'freeze');
-                if (freezeEffect) return;
-                
-                switch (e.key) {
-                    case 'ArrowUp':
-                    case 'w':
-                    case 'W':
-                        if (player.direction !== 'down') player.nextDirection = 'up';
-                        break;
-                    case 'ArrowDown':
-                    case 's':
-                    case 'S':
-                        if (player.direction !== 'up') player.nextDirection = 'down';
-                        break;
-                    case 'ArrowLeft':
-                    case 'a':
-                    case 'A':
-                        if (player.direction !== 'right') player.nextDirection = 'left';
-                        break;
-                    case 'ArrowRight':
-                    case 'd':
-                    case 'D':
-                        if (player.direction !== 'left') player.nextDirection = 'right';
-                        break;
-                }
-            });
             
             // 触屏控制
             let touchStartX = 0;
