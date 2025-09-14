@@ -131,18 +131,8 @@ export default function SnakeGame() {
   }, [multiplayerMode, isOwner, roomId]);
 
   const startSinglePlayer = () => {
-    const newPlayerId = uuidv4();
-    setPlayerId(newPlayerId);
-    setPlayers([{
-      id: newPlayerId, name: playerName, isReady: true,
-      snake: [{ x: 10, y: 10 }], direction: "RIGHT",
-      color: "bg-green-500", isAlive: true, score: 0,
-    }]);
-    setFoods([{ x: 5, y: 5 }]);
-    setGameOver(false);
-    setGameStarted(true);
-    setWinner(null);
-    setMultiplayerMode(false);
+    // 跳转到demo.html单人模式
+    window.location.href = `/demo.html?playerName=${encodeURIComponent(playerName)}`;
   };
 
   const changeDirection = (newDirection: "UP" | "DOWN" | "LEFT" | "RIGHT") => {
@@ -331,52 +321,10 @@ export default function SnakeGame() {
           </div>
         </div>
       ) : gameStarted && !multiplayerMode ? (
-        // Single Player Game View
-        <div>
-          <div className="mb-4">
-            <h3>你的分数: {score}</h3>
-          </div>
-          {gameOver && (
-            <div className="text-red-500 text-xl mb-4">
-              游戏结束!
-            </div>
-          )}
-          <div className="relative">
-            <div
-              className="grid bg-white border border-gray-300"
-              style={{ gridTemplateColumns: `repeat(${gridSize}, ${CELL_SIZE}px)`, gridTemplateRows: `repeat(${gridSize}, ${CELL_SIZE}px)` }}
-            >
-            {Array.from({ length: gridSize * gridSize }).map((_, index) => {
-              const x = index % gridSize;
-              const y = Math.floor(index / gridSize);
-              const isFood = foods.some(f => f.x === x && f.y === y);
-              let cellColor = "";
-              let headIcon = null;
-              if (players[0] && players[0].isAlive) {
-                const snake = players[0].snake;
-                if (snake.length > 0 && snake[0].x === x && snake[0].y === y) {
-                  headIcon = getDirectionalIcon(players[0].direction);
-                  cellColor = players[0].color;
-                } else if (snake.some(segment => segment.x === x && segment.y === y)) {
-                  cellColor = players[0].color;
-                }
-              }
-              if (isFood) {
-                cellColor = "bg-red-500";
-                headIcon = null;
-              }
-              return (
-                <div key={index} className={`w-full h-full border border-gray-100 ${cellColor} flex items-center justify-center`}>
-                  {headIcon && <span className="text-white font-bold">{headIcon}</span>}
-                </div>
-              );
-            })}
-            </div>
-          </div>
-          <button onClick={startSinglePlayer} className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
-            再玩一局
-          </button>
-          {gameStarted && <DirectionalControls />}
+        // 不再显示React的单人模式，直接跳转到demo.html
+        <div className="text-center">
+          <p>正在加载单人模式游戏...</p>
+          <p>如果页面没有自动跳转，请<a href="/demo.html" className="text-blue-500 underline">点击这里</a></p>
         </div>
       ) : (
         // Multiplayer Room View

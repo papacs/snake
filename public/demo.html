@@ -1,0 +1,1335 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>多人贪吃蛇大冒险</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Arial Rounded MT Bold', 'Arial', sans-serif;
+        }
+        body {
+            background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            color: white;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            max-width: 1200px;
+            width: 100%;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        h1 {
+            font-size: 2.8rem;
+            text-shadow: 3px 3px 0 #000;
+            margin-bottom: 10px;
+            color: #ffde59;
+        }
+        .game-area {
+            display: flex;
+            gap: 30px;
+            width: 100%;
+        }
+        #game-board {
+            border: 3px solid #fff;
+            border-radius: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+        .sidebar {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .players-panel {
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 10px;
+            padding: 15px;
+            border: 2px solid #fff;
+        }
+        .players-panel h2 {
+            color: #ffde59;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .player {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            padding: 8px;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .player-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+        .foods-info {
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 10px;
+            padding: 15px;
+            border: 2px solid #fff;
+        }
+        .foods-info h2 {
+            color: #ffde59;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .food-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .food-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            margin-right: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            border: 2px solid white;
+        }
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(to bottom, #ffde59, #ff9900);
+            color: #000;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 0 #cc7700;
+        }
+        button:hover {
+            transform: translateY(2px);
+            box-shadow: 0 2px 0 #cc7700;
+        }
+        button:active {
+            transform: translateY(4px);
+            box-shadow: none;
+        }
+        .instructions {
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            max-width: 800px;
+            border: 2px solid #fff;
+        }
+        .instructions h2 {
+            color: #ffde59;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .instructions ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        .instructions li {
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+        }
+        .instructions .food-icon {
+            flex-shrink: 0;
+        }
+        .status {
+            font-size: 1.2rem;
+            margin-bottom: 15px;
+            text-align: center;
+            font-weight: bold;
+            color: #ffde59;
+            text-shadow: 1px 1px 0 #000;
+        }
+        .effects-panel {
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 10px;
+            padding: 15px;
+            border: 2px solid #fff;
+            min-height: 100px;
+        }
+        .effects-panel h2 {
+            color: #ffde59;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        #current-effects {
+            min-height: 60px;
+        }
+        .timer-bar {
+            height: 5px;
+            width: 100%;
+            background: #333;
+            border-radius: 5px;
+            margin-top: 5px;
+            overflow: hidden;
+        }
+        .timer-progress {
+            height: 100%;
+            border-radius: 5px;
+            transition: width 0.3s;
+        }
+        .player-alive {
+            border-left: 4px solid #00ff00;
+        }
+        .player-dead {
+            border-left: 4px solid #ff0000;
+            opacity: 0.7;
+        }
+        .food-preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 15px;
+            justify-content: center;
+        }
+        .food-preview-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 5px;
+        }
+        .preview-icon {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            border: 2px solid white;
+            margin-bottom: 5px;
+        }
+
+        @media (max-width: 800px) {
+            .game-area {
+                flex-direction: column;
+                align-items: center;
+                gap: 20px;
+            }
+            #game-board {
+                max-width: 100%;
+                height: auto;
+            }
+            .sidebar {
+                width: 100%;
+            }
+            .controls {
+                order: -1; /* Move to the top of the sidebar */
+                margin-bottom: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h3>贪吃蛇大冒险</h3>
+            <div class="status" id="status">准备开始游戏...</div>
+        </header>
+        
+        <div class="game-area">
+            <canvas id="game-board" width="600" height="500"></canvas>
+            
+            <div class="sidebar">
+                <div class="players-panel">
+                    <h2>玩家列表</h2>
+                    <div id="players-list">
+                        <div class="player player-alive">
+                            <div class="player-color" style="background-color: #ff3333;"></div>
+                            <span>玩家1 (你)</span>
+                            <span style="margin-left: auto;">分数: 0</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="foods-info">
+                    <h2>食物类型</h2>
+                    <div class="food-item">
+                        <div class="food-icon" style="background-color: #ff0000;">1</div>
+                        <span>普通食物 - 增加长度和分数</span>
+                    </div>
+                    <div class="food-item">
+                        <div class="food-icon" style="background-color: #00aaff;">2</div>
+                        <span>冰冻果实 - 定住几秒不能动</span>
+                    </div>
+                    <div class="food-item">
+                        <div class="food-icon" style="background-color: #ff5500;">3</div>
+                        <span>加速辣椒 - 短时间内大幅加速</span>
+                    </div>
+                    <div class="food-item">
+                        <div class="food-icon" style="background-color: #aa00ff;">4</div>
+                        <span>缩小蘑菇 - 减少身体长度</span>
+                    </div>
+                    <div class="food-item">
+                        <div class="food-icon" style="background: linear-gradient(45deg, red, orange, yellow, green, blue, indigo, violet);">5</div>
+                        <span>彩虹糖果 - 随机效果</span>
+                    </div>
+                    <div class="food-item">
+                        <div class="food-icon" style="background: linear-gradient(45deg, #00ffaa, #00aaff);">6</div>
+                        <span>传送门 - 传送到随机位置</span>
+                    </div>
+                    <div class="food-item">
+                        <div class="food-icon" style="background-color: #00ff00;">8</div>
+                        <span>穿墙能力 - 可以穿过墙壁</span>
+                    </div>
+                    <div class="food-item">
+                        <div class="food-icon" style="background-color: #ffffff; color: black;">9</div>
+                        <span>无敌状态 - 暂时免疫伤害</span>
+                    </div>
+                    <div class="food-item">
+                        <div class="food-icon" style="background-color: #ff00ff;">X</div>
+                        <span>磁铁 - 吸引附近食物</span>
+                    </div>
+                    <div>
+                          食物会在一段时间后消失，注意食物上的计时条
+                撞到墙壁、其他蛇或自己的身体会导致游戏结束
+                    </div>
+                     <!-- <li>食物会在一段时间后消失，注意食物上的计时条</li>
+                <li>撞到墙壁、其他蛇或自己的身体会导致游戏结束</li> -->
+                </div>
+                
+                <div class="effects-panel">
+                    <h2>当前效果</h2>
+                    <div id="current-effects">无</div>
+                </div>
+                
+                <div class="controls">
+                    <button id="start-btn">开始游戏</button>
+                    <button id="restart-btn">重新开始</button>
+                    <!-- <button id="slow-btn">减速</button>
+                    <button id="fast-btn">加速</button> -->
+                    <button id="add-player-btn">添加AI玩家</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- <div class="instructions">
+            <h2>游戏说明</h2>
+            <ul>
+                <li>使用方向键或WASD控制蛇的移动</li>
+                <li>收集不同食物获得不同效果：</li>
+                <li><div class="food-icon" style="background-color: #ff0000;">1</div> 普通食物 - 增加长度和分数</li>
+                <li><div class="food-icon" style="background-color: #00aaff;">2</div> 冰冻果实 - 小心！吃了会被定住几秒</li>
+                <li><div class="food-icon" style="background-color: #ff5500;">3</div> 加速辣椒 - 短时间内大幅提高速度</li>
+                <li><div class="food-icon" style="background-color: #aa00ff;">4</div> 缩小蘑菇 - 减少身体长度</li>
+                <li><div class="food-icon" style="background: linear-gradient(45deg, red, orange, yellow, green, blue, indigo, violet);">5</div> 彩虹糖果 - 随机产生正面或负面效果</li>
+                <li><div class="food-icon" style="background: linear-gradient(45deg, #00ffaa, #00aaff);">6</div> 传送门 - 瞬间传送到随机位置</li>
+                <li><div class="food-icon" style="background-color: #00ff00;">8</div> 穿墙能力 - 可以穿过墙壁</li>
+                <li><div class="food-icon" style="background-color: #ffffff; color: black;">9</div> 无敌状态 - 暂时免疫碰撞伤害</li>
+                <li><div class="food-icon" style="background-color: #ff00ff;">X</div> 磁铁 - 吸引附近食物</li>
+                <li>食物会在一段时间后消失，注意食物上的计时条</li>
+                <li>撞到墙壁、其他蛇或自己的身体会导致游戏结束</li>
+            </ul>
+        </div> -->
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const canvas = document.getElementById('game-board');
+            const ctx = canvas.getContext('2d');
+            const startBtn = document.getElementById('start-btn');
+            const restartBtn = document.getElementById('restart-btn');
+            const slowBtn = document.getElementById('slow-btn');
+            const fastBtn = document.getElementById('fast-btn');
+            const addPlayerBtn = document.getElementById('add-player-btn');
+            const statusDiv = document.getElementById('status');
+            const playersList = document.getElementById('players-list');
+            const currentEffects = document.getElementById('current-effects');
+            
+            // 游戏配置
+            const gridSize = 20;
+            const gameWidth = canvas.width;
+            const gameHeight = canvas.height;
+            const gridWidth = gameWidth / gridSize;
+            const gridHeight = gameHeight / gridSize;
+            
+            // 食物类型（已移除REVERSE类型）
+            const FOOD_TYPES = {
+                NORMAL: { id: 1, color: '#ff0000', score: 1, length: 1, lifetime: 10000, name: "普通食物" },
+                FREEZE: { id: 2, color: '#00aaff', score: 2, effect: 'freeze', duration: 3000, lifetime: 8000, name: "冰冻果实" },
+                SPEED: { id: 3, color: '#ff5500', score: 3, effect: 'speed', duration: 5000, speedMultiplier: 2, lifetime: 8000, name: "加速辣椒" },
+                SHRINK: { id: 4, color: '#aa00ff', score: 2, effect: 'shrink', value: 3, lifetime: 8000, name: "缩小蘑菇" },
+                RAINBOW: { id: 5, color: 'rainbow', score: 5, effect: 'random', lifetime: 7000, name: "彩虹糖果" },
+                TELEPORT: { id: 6, color: 'linear-gradient(45deg, #00ffaa, #00aaff)', score: 2, effect: 'teleport', lifetime: 7000, name: "传送门" },
+                GHOST: { id: 8, color: '#00ff00', score: 4, effect: 'ghost', duration: 6000, lifetime: 8000, name: "穿墙能力" },
+                INVINCIBLE: { id: 9, color: '#ffffff', score: 5, effect: 'invincible', duration: 5000, lifetime: 8000, name: "无敌状态" },
+                MAGNET: { id: 10, color: '#ff00ff', score: 3, effect: 'magnet', duration: 8000, lifetime: 8000, name: "磁铁" }
+            };
+            
+            // 玩家数据 - 默认只有玩家1
+            let players = {
+                'player1': {
+                    id: 'player1',
+                    name: '玩家1',
+                    color: '#ff3333',
+                    headColor: '#ff6666',
+                    snake: [],
+                    direction: 'right',
+                    nextDirection: 'right',
+                    score: 0,
+                    effects: [],
+                    isAlive: true,
+                    speed: 8, // 初始速度 (帧/秒)
+                    isAI: false
+                }
+            };
+            
+            // 食物数据
+            let foods = [];
+            
+            // 游戏状态
+            let gameRunning = false;
+            let lastUpdateTime = 0;
+            let frameCount = 0;
+            let playerCount = 1;
+            
+            // 初始化游戏
+            function initGame() {
+                // 初始化玩家蛇
+                let startPositions = [
+                    {x: 10, y: 10, dir: 'right'}
+                ];
+                
+                let i = 0;
+                for (let playerId in players) {
+                    const player = players[playerId];
+                    const pos = startPositions[i % startPositions.length];
+                    
+                    player.snake = [
+                        { x: pos.x, y: pos.y },
+                        { x: pos.x - (pos.dir === 'right' ? 1 : 0) + (pos.dir === 'left' ? 1 : 0), 
+                          y: pos.y - (pos.dir === 'down' ? 1 : 0) + (pos.dir === 'up' ? 1 : 0) },
+                        { x: pos.x - (pos.dir === 'right' ? 2 : 0) + (pos.dir === 'left' ? 2 : 0), 
+                          y: pos.y - (pos.dir === 'down' ? 2 : 0) + (pos.dir === 'up' ? 2 : 0) }
+                    ];
+                    player.direction = pos.dir;
+                    player.nextDirection = pos.dir;
+                    player.score = 0;
+                    player.effects = [];
+                    player.isAlive = true;
+                    player.speed = 8;
+                    
+                    i++;
+                }
+                
+                // 生成初始食物
+                foods = [];
+                generateFood(8);
+                
+                // 更新玩家列表显示
+                updatePlayersList();
+                
+                statusDiv.textContent = "游戏开始！使用方向键控制移动";
+                currentEffects.textContent = "无";
+            }
+            
+            // 生成食物
+            function generateFood(count = 1) {
+                for (let i = 0; i < count; i++) {
+                    let foodX, foodY;
+                    let overlapping = true;
+                    let attempts = 0;
+                    
+                    // 确保食物不会生成在蛇身上
+                    while (overlapping && attempts < 100) {
+                        foodX = Math.floor(Math.random() * gridWidth);
+                        foodY = Math.floor(Math.random() * gridHeight);
+                        
+                        overlapping = false;
+                        
+                        // 检查是否与任何蛇重叠
+                        for (let playerId in players) {
+                            const snake = players[playerId].snake;
+                            for (let segment of snake) {
+                                if (segment.x === foodX && segment.y === foodY) {
+                                    overlapping = true;
+                                    break;
+                                }
+                            }
+                            if (overlapping) break;
+                        }
+                        
+                        // 检查是否与现有食物重叠
+                        if (!overlapping) {
+                            for (let food of foods) {
+                                if (food.x === foodX && food.y === foodY) {
+                                    overlapping = true;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        attempts++;
+                    }
+                    
+                    if (attempts >= 100) continue; // 防止无限循环
+                    
+                    // 随机选择食物类型，增加普通食物的概率
+                    const foodTypes = Object.values(FOOD_TYPES);
+                    let foodType;
+                    
+                    if (Math.random() < 0.4) {
+                        foodType = FOOD_TYPES.NORMAL; // 40% 概率为普通食物
+                    } else {
+                        foodType = foodTypes[Math.floor(Math.random() * (foodTypes.length - 1)) + 1];
+                    }
+                    
+                    foods.push({
+                        x: foodX,
+                        y: foodY,
+                        type: foodType,
+                        spawnTime: Date.now(),
+                        lifetime: foodType.lifetime
+                    });
+                }
+            }
+            
+            // 更新游戏状态
+            function update(timestamp) {
+                if (!gameRunning) return;
+                
+                // 计算时间增量
+                const deltaTime = timestamp - lastUpdateTime;
+                
+                // 根据玩家速度计算更新间隔
+                const player = players['player1'];
+                const updateInterval = 1000 / player.speed;
+                
+                if (deltaTime > updateInterval) {
+                    // 更新食物生命周期
+                    updateFoods();
+                    
+                    // 更新AI玩家
+                    updateAI();
+                    
+                    // 更新玩家蛇的移动
+                    for (let playerId in players) {
+                        const player = players[playerId];
+                        if (!player.isAlive) continue;
+                        
+                        // 应用下一个方向
+                        player.direction = player.nextDirection;
+                        
+                        // 检查是否有冻结效果
+                        const freezeEffect = player.effects.find(effect => effect.type === 'freeze');
+                        if (freezeEffect) {
+                            // 冻结中，不移动
+                            continue;
+                        }
+                        
+                        // 获取蛇头
+                        const head = { ...player.snake[0] };
+                        
+                        // 根据方向移动蛇头
+                        switch (player.direction) {
+                            case 'up': head.y--; break;
+                            case 'down': head.y++; break;
+                            case 'left': head.x--; break;
+                            case 'right': head.x++; break;
+                        }
+                        
+                        // 检查穿墙效果
+                        const ghostEffect = player.effects.find(effect => effect.type === 'ghost');
+                        if (!ghostEffect) {
+                            // 检查边界碰撞
+                            if (head.x < 0 || head.x >= gridWidth || head.y < 0 || head.y >= gridHeight) {
+                                player.isAlive = false;
+                                statusDiv.textContent = `${player.name} 撞墙了！`;
+                                continue;
+                            }
+                        } else {
+                            // 穿墙模式
+                            if (head.x < 0) head.x = gridWidth - 1;
+                            if (head.x >= gridWidth) head.x = 0;
+                            if (head.y < 0) head.y = gridHeight - 1;
+                            if (head.y >= gridHeight) head.y = 0;
+                        }
+                        
+                        // 检查自身碰撞（无敌状态除外）
+                        const invincibleEffect = player.effects.find(effect => effect.type === 'invincible');
+                        if (!invincibleEffect) {
+                            for (let i = 1; i < player.snake.length; i++) {
+                                if (player.snake[i].x === head.x && player.snake[i].y === head.y) {
+                                    player.isAlive = false;
+                                    statusDiv.textContent = `${player.name} 撞到了自己！`;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        // 检查其他玩家碰撞
+                        if (!invincibleEffect) {
+                            for (let otherPlayerId in players) {
+                                if (otherPlayerId === playerId) continue;
+                                const otherPlayer = players[otherPlayerId];
+                                if (!otherPlayer.isAlive) continue;
+                                
+                                for (let i = 0; i < otherPlayer.snake.length; i++) {
+                                    if (otherPlayer.snake[i].x === head.x && otherPlayer.snake[i].y === head.y) {
+                                        player.isAlive = false;
+                                        statusDiv.textContent = `${player.name} 撞到了 ${otherPlayer.name}！`;
+                                        break;
+                                    }
+                                }
+                                if (!player.isAlive) break;
+                            }
+                        }
+                        
+                        if (!player.isAlive) continue;
+                        
+                        // 检查食物碰撞
+                        let ateFood = false;
+                        for (let i = 0; i < foods.length; i++) {
+                            if (foods[i].x === head.x && foods[i].y === head.y) {
+                                // 吃到食物
+                                const foodType = foods[i].type;
+                                player.score += foodType.score;
+                                
+                                // 应用食物效果
+                                applyFoodEffect(player, foodType);
+                                
+                                // 移除被吃掉的食物
+                                foods.splice(i, 1);
+                                
+                                // 生成新的食物
+                                generateFood(1);
+                                
+                                ateFood = true;
+                                break;
+                            }
+                        }
+                        
+                        // 磁铁效果 - 吸引附近食物
+                        const magnetEffect = player.effects.find(effect => effect.type === 'magnet');
+                        if (magnetEffect) {
+                            attractFoods(player);
+                        }
+                        
+                        // 移动蛇
+                        player.snake.unshift(head);
+                        if (!ateFood) {
+                            player.snake.pop();
+                        }
+                    }
+                    
+                    // 更新效果持续时间
+                    for (let playerId in players) {
+                        const player = players[playerId];
+                        for (let i = player.effects.length - 1; i >= 0; i--) {
+                            player.effects[i].duration -= deltaTime;
+                            if (player.effects[i].duration <= 0) {
+                                // 移除效果
+                                if (player.effects[i].type === 'speed') {
+                                    player.speed = 8; // 恢复默认速度
+                                }
+                                player.effects.splice(i, 1);
+                            }
+                        }
+                        updateEffectsDisplay(player);
+                    }
+                    
+                    // 更新玩家列表显示
+                    updatePlayersList();
+                    
+                    lastUpdateTime = timestamp;
+                }
+                
+                // 绘制游戏
+                draw();
+                
+                // 检查游戏结束条件
+                checkGameEnd();
+                
+                // 继续游戏循环
+                requestAnimationFrame(update);
+            }
+            
+            // 更新食物生命周期
+            function updateFoods() {
+                const now = Date.now();
+                for (let i = foods.length - 1; i >= 0; i--) {
+                    const food = foods[i];
+                    const elapsed = now - food.spawnTime;
+                    
+                    if (elapsed > food.lifetime) {
+                        // 食物过期，移除并生成新的
+                        foods.splice(i, 1);
+                        generateFood(1);
+                    }
+                }
+            }
+            
+            // 磁铁效果 - 吸引附近食物
+            function attractFoods(player) {
+                const head = player.snake[0];
+                const magnetRadius = 5; // 吸引半径
+                
+                for (let food of foods) {
+                    const dx = food.x - head.x;
+                    const dy = food.y - head.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < magnetRadius && distance > 0.5) {
+                        // 移动食物向蛇头
+                        food.x -= Math.sign(dx) * 0.5;
+                        food.y -= Math.sign(dy) * 0.5;
+                        
+                        // 确保食物不会穿过蛇头
+                        if (Math.abs(food.x - head.x) < 0.5) food.x = head.x;
+                        if (Math.abs(food.y - head.y) < 0.5) food.y = head.y;
+                    }
+                }
+            }
+            
+            // 更新AI玩家
+            function updateAI() {
+                for (let playerId in players) {
+                    const player = players[playerId];
+                    if (!player.isAlive || !player.isAI) continue;
+                    
+                    // 简单AI：寻找最近的食物
+                    const head = player.snake[0];
+                    let closestFood = null;
+                    let minDistance = Infinity;
+                    
+                    for (let food of foods) {
+                        const dx = food.x - head.x;
+                        const dy = food.y - head.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            closestFood = food;
+                        }
+                    }
+                    
+                    if (closestFood) {
+                        const dx = closestFood.x - head.x;
+                        const dy = closestFood.y - head.y;
+                        
+                        // 决定移动方向
+                        let desiredDirection = player.direction;
+                        
+                        if (Math.abs(dx) > Math.abs(dy)) {
+                            // 水平移动
+                            desiredDirection = dx > 0 ? 'right' : 'left';
+                        } else {
+                            // 垂直移动
+                            desiredDirection = dy > 0 ? 'down' : 'up';
+                        }
+                        
+                        // 避免自杀性转向
+                        if (desiredDirection === 'right' && player.direction !== 'left') {
+                            player.nextDirection = 'right';
+                        } else if (desiredDirection === 'left' && player.direction !== 'right') {
+                            player.nextDirection = 'left';
+                        } else if (desiredDirection === 'down' && player.direction !== 'up') {
+                            player.nextDirection = 'down';
+                        } else if (desiredDirection === 'up' && player.direction !== 'down') {
+                            player.nextDirection = 'up';
+                        }
+                        
+                        // 避免撞墙 - 如果即将撞墙，改变方向
+                        const nextHead = { ...head };
+                        switch (player.nextDirection) {
+                            case 'up': nextHead.y--; break;
+                            case 'down': nextHead.y++; break;
+                            case 'left': nextHead.x--; break;
+                            case 'right': nextHead.x++; break;
+                        }
+                        
+                        if (nextHead.x < 0 || nextHead.x >= gridWidth || 
+                            nextHead.y < 0 || nextHead.y >= gridHeight) {
+                            // 尝试其他方向
+                            const directions = ['up', 'down', 'left', 'right'];
+                            for (let dir of directions) {
+                                if (dir === player.direction) continue;
+                                
+                                const testHead = { ...head };
+                                switch (dir) {
+                                    case 'up': testHead.y--; break;
+                                    case 'down': testHead.y++; break;
+                                    case 'left': testHead.x--; break;
+                                    case 'right': testHead.x++; break;
+                                }
+                                
+                                if (testHead.x >= 0 && testHead.x < gridWidth && 
+                                    testHead.y >= 0 && testHead.y < gridHeight) {
+                                    player.nextDirection = dir;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 应用食物效果
+            function applyFoodEffect(player, foodType) {
+                switch (foodType.effect) {
+                    case 'freeze':
+                        player.effects.push({
+                            type: 'freeze',
+                            duration: foodType.duration,
+                            message: `被冰冻了 ${foodType.duration/1000} 秒`
+                        });
+                        break;
+                    case 'speed':
+                        player.speed *= foodType.speedMultiplier;
+                        player.effects.push({
+                            type: 'speed',
+                            duration: foodType.duration,
+                            message: `速度提升了 ${foodType.duration/1000} 秒`
+                        });
+                        break;
+                    case 'shrink':
+                        // 缩短蛇身
+                        const shrinkAmount = Math.min(foodType.value, player.snake.length - 1);
+                        for (let i = 0; i < shrinkAmount; i++) {
+                            player.snake.pop();
+                        }
+                        player.effects.push({
+                            type: 'shrink',
+                            duration: 2000,
+                            message: `身体缩短了 ${shrinkAmount} 节`
+                        });
+                        break;
+                    case 'random':
+                        // 随机效果（已移除reverse选项）
+                        const randomEffects = ['freeze', 'speed', 'shrink', 'grow', 'ghost', 'magnet'];
+                        const randomEffect = randomEffects[Math.floor(Math.random() * randomEffects.length)];
+                        
+                        switch (randomEffect) {
+                            case 'freeze':
+                                player.effects.push({
+                                    type: 'freeze',
+                                    duration: 2000,
+                                    message: `随机效果: 被冰冻了 2 秒`
+                                });
+                                break;
+                            case 'speed':
+                                player.speed *= 1.5;
+                                player.effects.push({
+                                    type: 'speed',
+                                    duration: 3000,
+                                    message: `随机效果: 速度提升了 3 秒`
+                                });
+                                break;
+                            case 'shrink':
+                                const randomShrink = Math.floor(Math.random() * 3) + 1;
+                                for (let i = 0; i < randomShrink; i++) {
+                                    if (player.snake.length > 1) player.snake.pop();
+                                }
+                                player.effects.push({
+                                    type: 'shrink',
+                                    duration: 2000,
+                                    message: `随机效果: 身体缩短了 ${randomShrink} 节`
+                                });
+                                break;
+                            case 'grow':
+                                const randomGrow = Math.floor(Math.random() * 3) + 1;
+                                for (let i = 0; i < randomGrow; i++) {
+                                    player.snake.push({ ...player.snake[player.snake.length - 1] });
+                                }
+                                player.effects.push({
+                                    type: 'grow',
+                                    duration: 2000,
+                                    message: `随机效果: 身体增长了 ${randomGrow} 节`
+                                });
+                                break;
+                            case 'ghost':
+                                player.effects.push({
+                                    type: 'ghost',
+                                    duration: 4000,
+                                    message: `随机效果: 获得穿墙能力 4 秒`
+                                });
+                                break;
+                            case 'magnet':
+                                player.effects.push({
+                                    type: 'magnet',
+                                    duration: 5000,
+                                    message: `随机效果: 获得磁铁能力 5 秒`
+                                });
+                                break;
+                        }
+                        break;
+                    case 'teleport':
+                        // 传送到随机位置
+                        const newX = Math.floor(Math.random() * (gridWidth - 10)) + 5;
+                        const newY = Math.floor(Math.random() * (gridHeight - 10)) + 5;
+                        
+                        // 确保不会传送到障碍物上
+                        player.snake = [{ x: newX, y: newY }];
+                        for (let i = 1; i < 3; i++) {
+                            player.snake.push({ x: newX - i, y: newY });
+                        }
+                        
+                        player.effects.push({
+                            type: 'teleport',
+                            duration: 2000,
+                            message: `传送到了新位置!`
+                        });
+                        break;
+                    case 'ghost':
+                        player.effects.push({
+                            type: 'ghost',
+                            duration: foodType.duration,
+                            message: `获得穿墙能力 ${foodType.duration/1000} 秒`
+                        });
+                        break;
+                    case 'invincible':
+                        player.effects.push({
+                            type: 'invincible',
+                            duration: foodType.duration,
+                            message: `无敌状态 ${foodType.duration/1000} 秒`
+                        });
+                        break;
+                    case 'magnet':
+                        player.effects.push({
+                            type: 'magnet',
+                            duration: foodType.duration,
+                            message: `获得磁铁能力 ${foodType.duration/1000} 秒`
+                        });
+                        break;
+                    default:
+                        // 普通食物，默认增长一节
+                        player.snake.push({ ...player.snake[player.snake.length - 1] });
+                }
+            }
+            
+            // 更新效果显示
+            function updateEffectsDisplay(player) {
+                if (player.effects.length > 0) {
+                    let effectsHTML = '';
+                    for (let effect of player.effects) {
+                        effectsHTML += `<div>${effect.message}</div>`;
+                    }
+                    currentEffects.innerHTML = effectsHTML;
+                } else {
+                    currentEffects.textContent = "无";
+                }
+            }
+            
+            // 绘制游戏
+            function draw() {
+                // 清空画布
+                ctx.clearRect(0, 0, gameWidth, gameHeight);
+                
+                // 绘制背景
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                ctx.fillRect(0, 0, gameWidth, gameHeight);
+                
+                // 绘制网格
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+                ctx.lineWidth = 0.5;
+                for (let x = 0; x < gridWidth; x++) {
+                    for (let y = 0; y < gridHeight; y++) {
+                        ctx.beginPath();
+                        ctx.rect(x * gridSize, y * gridSize, gridSize, gridSize);
+                        ctx.stroke();
+                    }
+                }
+                
+                // 绘制食物
+                const now = Date.now();
+                for (let food of foods) {
+                    const elapsed = now - food.spawnTime;
+                    const remaining = food.lifetime - elapsed;
+                    const percent = Math.max(0, Math.min(100, remaining / food.lifetime * 100));
+                    
+                    if (food.type.color === 'rainbow') {
+                        // 绘制彩虹食物
+                        const gradient = ctx.createRadialGradient(
+                            food.x * gridSize + gridSize/2,
+                            food.y * gridSize + gridSize/2,
+                            0,
+                            food.x * gridSize + gridSize/2,
+                            food.y * gridSize + gridSize/2,
+                            gridSize/2
+                        );
+                        gradient.addColorStop(0, 'red');
+                        gradient.addColorStop(0.2, 'orange');
+                        gradient.addColorStop(0.4, 'yellow');
+                        gradient.addColorStop(0.6, 'green');
+                        gradient.addColorStop(0.8, 'blue');
+                        gradient.addColorStop(1, 'purple');
+                        
+                        ctx.fillStyle = gradient;
+                    } else if (food.type.color.startsWith('linear-gradient')) {
+                        // 绘制传送门食物
+                        const gradient = ctx.createLinearGradient(
+                            food.x * gridSize,
+                            food.y * gridSize,
+                            food.x * gridSize + gridSize,
+                            food.y * gridSize + gridSize
+                        );
+                        gradient.addColorStop(0, '#00ffaa');
+                        gradient.addColorStop(1, '#00aaff');
+                        
+                        ctx.fillStyle = gradient;
+                    } else {
+                        ctx.fillStyle = food.type.color;
+                    }
+                    
+                    // 闪烁效果（当食物快要消失时）
+                    if (percent < 20 && Math.floor(Date.now() / 200) % 2 === 0) {
+                        ctx.fillStyle = '#ffffff';
+                    }
+                    
+                    ctx.beginPath();
+                    ctx.arc(
+                        food.x * gridSize + gridSize/2,
+                        food.y * gridSize + gridSize/2,
+                        gridSize/2 - 2,
+                        0,
+                        Math.PI * 2
+                    );
+                    ctx.fill();
+                    
+                    // 添加白色边框
+                    ctx.strokeStyle = 'white';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    
+                    // 绘制食物标识
+                    ctx.fillStyle = 'white';
+                    ctx.font = 'bold 10px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(food.type.id.toString(), food.x * gridSize + gridSize/2, food.y * gridSize + gridSize/2);
+                    
+                    // 绘制食物计时条
+                    ctx.fillStyle = `hsl(${percent * 1.2}, 100%, 50%)`;
+                    ctx.fillRect(
+                        food.x * gridSize,
+                        food.y * gridSize + gridSize - 3,
+                        gridSize * (percent / 100),
+                        2
+                    );
+                }
+                
+                // 绘制玩家蛇
+                for (let playerId in players) {
+                    const player = players[playerId];
+                    if (!player.isAlive) continue;
+                    
+                    // 检查是否有无敌效果
+                    const invincibleEffect = player.effects.find(effect => effect.type === 'invincible');
+                    
+                    // 绘制蛇身
+                    for (let i = 0; i < player.snake.length; i++) {
+                        const segment = player.snake[i];
+                        
+                        // 蛇头与身体颜色区分
+                        if (i === 0) {
+                            ctx.fillStyle = player.headColor;
+                            ctx.shadowColor = player.headColor;
+                            ctx.shadowBlur = 15;
+                        } else {
+                            // 身体颜色
+                            ctx.fillStyle = player.color;
+                            ctx.shadowColor = player.color;
+                            ctx.shadowBlur = 5;
+                        }
+                        
+                        // 如果是无敌状态，让蛇闪烁
+                        if (invincibleEffect && frameCount % 10 < 5) {
+                            ctx.fillStyle = '#ffffff';
+                            ctx.shadowColor = '#ffffff';
+                        }
+                        
+                        ctx.beginPath();
+                        ctx.arc(
+                            segment.x * gridSize + gridSize/2,
+                            segment.y * gridSize + gridSize/2,
+                            gridSize/2 - 1,
+                            0,
+                            Math.PI * 2
+                        );
+                        ctx.fill();
+                        
+                        // 添加黑色边框，增强可见性
+                        ctx.strokeStyle = '#000';
+                        ctx.lineWidth = 1;
+                        ctx.stroke();
+                        
+                        // 如果是蛇头，绘制眼睛和标识
+                        if (i === 0) {
+                            ctx.fillStyle = invincibleEffect ? '#000000' : 'white';
+                            let eyeOffsetX = 0;
+                            let eyeOffsetY = 0;
+                            
+                            // 根据方向确定眼睛位置
+                            switch (player.direction) {
+                                case 'up':
+                                    eyeOffsetX = -3;
+                                    eyeOffsetY = -3;
+                                    ctx.fillRect(
+                                        segment.x * gridSize + gridSize/2 + eyeOffsetX - 1,
+                                        segment.y * gridSize + gridSize/2 + eyeOffsetY - 1,
+                                        2, 2
+                                    );
+                                    ctx.fillRect(
+                                        segment.x * gridSize + gridSize/2 - eyeOffsetX - 1,
+                                        segment.y * gridSize + gridSize/2 + eyeOffsetY - 1,
+                                        2, 2
+                                    );
+                                    break;
+                                case 'down':
+                                    eyeOffsetX = -3;
+                                    eyeOffsetY = 3;
+                                    ctx.fillRect(
+                                        segment.x * gridSize + gridSize/2 + eyeOffsetX - 1,
+                                        segment.y * gridSize + gridSize/2 + eyeOffsetY - 1,
+                                        2, 2
+                                    );
+                                    ctx.fillRect(
+                                        segment.x * gridSize + gridSize/2 - eyeOffsetX - 1,
+                                        segment.y * gridSize + gridSize/2 + eyeOffsetY - 1,
+                                        2, 2
+                                    );
+                                    break;
+                                case 'left':
+                                    eyeOffsetX = -3;
+                                    eyeOffsetY = -3;
+                                    ctx.fillRect(
+                                        segment.x * gridSize + gridSize/2 + eyeOffsetX - 1,
+                                        segment.y * gridSize + gridSize/2 + eyeOffsetY - 1,
+                                        2, 2
+                                    );
+                                    ctx.fillRect(
+                                        segment.x * gridSize + gridSize/2 + eyeOffsetX - 1,
+                                        segment.y * gridSize + gridSize/2 - eyeOffsetY - 1,
+                                        2, 2
+                                    );
+                                    break;
+                                case 'right':
+                                    eyeOffsetX = 3;
+                                    eyeOffsetY = -3;
+                                    ctx.fillRect(
+                                        segment.x * gridSize + gridSize/2 + eyeOffsetX - 1,
+                                        segment.y * gridSize + gridSize/2 + eyeOffsetY - 1,
+                                        2, 2
+                                    );
+                                    ctx.fillRect(
+                                        segment.x * gridSize + gridSize/2 + eyeOffsetX - 1,
+                                        segment.y * gridSize + gridSize/2 - eyeOffsetY - 1,
+                                        2, 2
+                                    );
+                                    break;
+                            }
+                            
+                            // 绘制玩家标识
+                            ctx.fillStyle = 'white';
+                            ctx.font = 'bold 12px Arial';
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            ctx.fillText(
+                                playerId.replace('player', 'P'),
+                                segment.x * gridSize + gridSize/2,
+                                segment.y * gridSize + gridSize/2 + 15
+                            );
+                        }
+                    }
+                    ctx.shadowBlur = 0;
+                }
+                
+                frameCount++;
+            }
+            
+            // 更新玩家列表显示
+            function updatePlayersList() {
+                playersList.innerHTML = '';
+                for (let playerId in players) {
+                    const player = players[playerId];
+                    const playerEl = document.createElement('div');
+                    playerEl.className = `player ${player.isAlive ? 'player-alive' : 'player-dead'}`;
+                    playerEl.innerHTML = `
+                        <div class="player-color" style="background-color: ${player.color};"></div>
+                        <span>${player.name} ${playerId === 'player1' ? '(你)' : ''}${player.isAI ? ' (AI)' : ''}</span>
+                        <span style="margin-left: auto;">分数: ${player.score}</span>
+                    `;
+                    playersList.appendChild(playerEl);
+                }
+            }
+            
+            // 检查游戏结束条件
+            function checkGameEnd() {
+                let alivePlayers = 0;
+                let lastAlivePlayer = null;
+                
+                for (let playerId in players) {
+                    if (players[playerId].isAlive) {
+                        alivePlayers++;
+                        lastAlivePlayer = players[playerId];
+                    }
+                }
+                
+                if (alivePlayers === 0) {
+                    gameRunning = false;
+                    statusDiv.textContent = "所有玩家都失败了！游戏结束";
+                    startBtn.textContent = "重新开始";
+                } else if (alivePlayers === 1 && Object.keys(players).length > 1) {
+                    gameRunning = false;
+                    statusDiv.textContent = `${lastAlivePlayer.name} 获胜！`;
+                    startBtn.textContent = "重新开始";
+                }
+            }
+            
+            // 键盘控制
+            document.addEventListener('keydown', (e) => {
+                if (!gameRunning) return;
+                
+                const player = players['player1'];
+                if (!player.isAlive) return;
+                
+                // 检查是否有冻结效果
+                const freezeEffect = player.effects.find(effect => effect.type === 'freeze');
+                if (freezeEffect) return;
+                
+                switch (e.key) {
+                    case 'ArrowUp':
+                    case 'w':
+                    case 'W':
+                        if (player.direction !== 'down') player.nextDirection = 'up';
+                        break;
+                    case 'ArrowDown':
+                    case 's':
+                    case 'S':
+                        if (player.direction !== 'up') player.nextDirection = 'down';
+                        break;
+                    case 'ArrowLeft':
+                    case 'a':
+                    case 'A':
+                        if (player.direction !== 'right') player.nextDirection = 'left';
+                        break;
+                    case 'ArrowRight':
+                    case 'd':
+                    case 'D':
+                        if (player.direction !== 'left') player.nextDirection = 'right';
+                        break;
+                }
+            });
+            
+            // 开始游戏按钮
+            startBtn.addEventListener('click', () => {
+                if (!gameRunning) {
+                    initGame();
+                    gameRunning = true;
+                    lastUpdateTime = performance.now();
+                    requestAnimationFrame(update);
+                    startBtn.textContent = "暂停游戏";
+                    statusDiv.textContent = "游戏开始！使用方向键控制移动";
+                } else {
+                    gameRunning = !gameRunning;
+                    if (gameRunning) {
+                        lastUpdateTime = performance.now();
+                        requestAnimationFrame(update);
+                        startBtn.textContent = "暂停游戏";
+                        statusDiv.textContent = "游戏继续";
+                    } else {
+                        startBtn.textContent = "继续游戏";
+                        statusDiv.textContent = "游戏已暂停";
+                    }
+                }
+            });
+            
+            // 重新开始按钮
+            restartBtn.addEventListener('click', () => {
+                gameRunning = false;
+                initGame();
+                gameRunning = true;
+                lastUpdateTime = performance.now();
+                requestAnimationFrame(update);
+                startBtn.textContent = "暂停游戏";
+                statusDiv.textContent = "游戏重新开始！";
+            });
+            
+            // 减速按钮
+            slowBtn.addEventListener('click', () => {
+                for (let playerId in players) {
+                    const player = players[playerId];
+                    if (player.speed > 5) {
+                        player.speed -= 2;
+                    }
+                }
+                statusDiv.textContent = `速度降低: ${players['player1'].speed}`;
+            });
+            
+            // 加速按钮
+            fastBtn.addEventListener('click', () => {
+                for (let playerId in players) {
+                    const player = players[playerId];
+                    if (player.speed < 20) {
+                        player.speed += 2;
+                    }
+                }
+                statusDiv.textContent = `速度增加: ${players['player1'].speed}`;
+            });
+            
+            // 添加AI玩家按钮
+            addPlayerBtn.addEventListener('click', () => {
+                if (playerCount >= 6) {
+                    statusDiv.textContent = "最多只能有6个玩家";
+                    return;
+                }
+                
+                const playerId = `player${++playerCount}`;
+                const colors = ['#33ff33', '#3333ff', '#ff33ff', '#33ffff', '#ffff33'];
+                const headColors = ['#66ff66', '#6666ff', '#ff66ff', '#66ffff', '#ffff66'];
+                const color = colors[(playerCount - 2) % colors.length];
+                const headColor = headColors[(playerCount - 2) % headColors.length];
+                
+                players[playerId] = {
+                    id: playerId,
+                    name: `玩家${playerCount}`,
+                    color: color,
+                    headColor: headColor,
+                    snake: [],
+                    direction: 'right',
+                    nextDirection: 'right',
+                    score: 0,
+                    effects: [],
+                    isAlive: true,
+                    speed: 8,
+                    isAI: true
+                };
+                
+                initGame();
+                updatePlayersList();
+                statusDiv.textContent = `已添加AI玩家${playerCount}`;
+            });
+            
+            // 初始绘制
+            draw();
+        });
+    </script>
+</body>
+</html>
