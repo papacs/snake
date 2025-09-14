@@ -1,7 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { io, Socket } from "socket.io-client";
-import { v4 as uuidv4 } from "uuid";
 
 let socket: Socket;
 
@@ -26,7 +25,7 @@ const FOOD_TYPES = {
 type Effect = {
     type: 'freeze' | 'speed' | 'ghost' | 'invincible' | 'magnet' | 'shrink' | 'grow' | 'teleport';
     duration: number;
-    [key: string]: any; 
+    [key: string]: unknown; 
 };
 
 type Food = Position & {
@@ -77,16 +76,6 @@ export default function SnakeGame() {
 
   // Current player
   const currentPlayer = players.find(p => p.id === playerId);
-
-  const getDirectionalIcon = (direction: "UP" | "DOWN" | "LEFT" | "RIGHT") => {
-    switch (direction) {
-      case "UP": return "↑";
-      case "DOWN": return "↓";
-      case "LEFT": return "←";
-      case "RIGHT": return "→";
-      default: return "";
-    }
-  };
 
   const socketInitializer = useCallback(() => {
     // --- DEBUG LINE ---
@@ -169,7 +158,7 @@ export default function SnakeGame() {
     window.location.href = `/demo.html?playerName=${encodeURIComponent(playerName)}`;
   };
 
-  const changeDirection = (newDirection: "UP" | "DOWN" | "LEFT" | "RIGHT") => {
+  const changeDirection = useCallback((newDirection: "UP" | "DOWN" | "LEFT" | "RIGHT") => {
     if (multiplayerMode) {
       if (socket && roomId) {
         socket.emit('changeDirection', { roomId, direction: newDirection });
@@ -186,7 +175,7 @@ export default function SnakeGame() {
         return prevPlayers;
       });
     }
-  };
+  }, [multiplayerMode, roomId]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -213,8 +202,6 @@ export default function SnakeGame() {
   };
   const readyUp = () => socket.emit('playerReady', { roomId });
   const startGame = () => socket.emit('startGame', { roomId });
-
-  const score = currentPlayer ? currentPlayer.score : 0;
 
   // Canvas drawing functions
   const drawGame = useCallback(() => {
