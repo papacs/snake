@@ -73,6 +73,12 @@ export default function SnakeGame() {
   const animationFrameRef = useRef<number | undefined>(undefined);
   const lastUpdateTimeRef = useRef<number>(0);
   const frameCountRef = useRef<number>(0);
+  
+  // Touch control refs
+  const touchOverlayRef = useRef<HTMLDivElement>(null);
+  const touchStartXRef = useRef<number>(0);
+  const touchStartYRef = useRef<number>(0);
+  const touchHandledRef = useRef<boolean>(false);
 
   // Current player
   const currentPlayer = players.find(p => p.id === playerId);
@@ -516,9 +522,96 @@ export default function SnakeGame() {
   );
 
 
+  // Touch event handlers
+  useEffect(() => {
+    const touchOverlay = touchOverlayRef.current;
+    if (!touchOverlay) return;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      e.preventDefault();
+      touchStartXRef.current = e.touches[0].clientX;
+      touchStartYRef.current = e.touches[0].clientY;
+      touchHandledRef.current = false;
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
+      if (!gameStarted || touchHandledRef.current) return;
+
+      const touchEndX = e.touches[0].clientX;
+      const touchEndY = e.touches[0].clientY;
+
+      const dx = touchEndX - touchStartXRef.current;
+      const dy = touchEndY - touchStartYRef.current;
+
+      if (Math.abs(dx) > 20 || Math.abs(dy) > 20) {
+        if (!currentPlayer?.isAlive) return;
+
+        const freezeEffect = currentPlayer.effects.find(effect => effect.type === 'freeze');
+        if (freezeEffect) return;
+
+        let newDirection: "UP" | "DOWN" | "LEFT" | "RIGHT" | null = null;
+
+        if (Math.abs(dx) > Math.abs(dy)) {
+          // Horizontal swipe
+          if (dx > 0) newDirection = "RIGHT";
+          else if (dx < 0) newDirection = "LEFT";
+        } else {
+          // Vertical swipe
+          if (dy > 0) newDirection = "DOWN";
+          else if (dy < 0) newDirection = "UP";
+        }
+
+        if (newDirection) {
+          changeDirection(newDirection);
+          touchHandledRef.current = true;
+        }
+      }
+    };
+
+    touchOverlay.addEventListener('touchstart', handleTouchStart, { passive: false });
+    touchOverlay.addEventListener('touchmove', handleTouchMove, { passive: false });
+
+    return () => {
+      touchOverlay.removeEventListener('touchstart', handleTouchStart);
+      touchOverlay.removeEventListener('touchmove', handleTouchMove);
+    };
+  }, [gameStarted, currentPlayer, changeDirection]);
+
+  // Prevent scrolling during gameplay
+  useEffect(() => {
+    if (gameStarted) {
+      document.body.style.overflow = 'hidden';
+      if (touchOverlayRef.current) {
+        touchOverlayRef.current.style.display = 'block';
+      }
+    } else {
+      document.body.style.overflow = '';
+      if (touchOverlayRef.current) {
+        touchOverlayRef.current.style.display = 'none';
+      }
+    }
+
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [gameStarted]);
+
   return (
     <div className="container">
       <audio ref={eatSoundRef} src="https://actions.google.com/sounds/v1/cartoon/pop.ogg" preload="auto"></audio>
+      <div 
+        ref={touchOverlayRef}
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          zIndex: 10,
+          display: 'none'
+        }}
+      />
       <header>
         <h1>贪吃蛇大作战</h1>
         {roomId && <div className="status">房间号: {roomId}</div>}
