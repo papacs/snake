@@ -258,6 +258,11 @@
             <canvas id="game-board" width="600" height="500"></canvas>
             
             <div class="sidebar">
+                <div class="effects-panel">
+                    <h2>当前效果</h2>
+                    <div id="current-effects">无</div>
+                </div>
+
                 <div class="players-panel">
                     <h2>玩家列表</h2>
                     <div id="players-list">
@@ -313,11 +318,6 @@
                     </div>
                      <!-- <li>食物会在一段时间后消失，注意食物上的计时条</li>
                 <li>撞到墙壁、其他蛇或自己的身体会导致游戏结束</li> -->
-                </div>
-                
-                <div class="effects-panel">
-                    <h2>当前效果</h2>
-                    <div id="current-effects">无</div>
                 </div>
                 
                 <div class="controls">
@@ -1196,12 +1196,12 @@
                     gameRunning = false;
                     statusDiv.textContent = "所有玩家都失败了！游戏结束";
                     startBtn.textContent = "重新开始";
-                    if (document.fullscreenElement) document.exitFullscreen();
+                    document.body.style.overflow = ''; // Restore scrolling
                 } else if (alivePlayers === 1 && Object.keys(players).length > 1) {
                     gameRunning = false;
                     statusDiv.textContent = `${lastAlivePlayer.name} 获胜！`;
                     startBtn.textContent = "重新开始";
-                    if (document.fullscreenElement) document.exitFullscreen();
+                    document.body.style.overflow = ''; // Restore scrolling
                 }
             }
             
@@ -1296,17 +1296,7 @@
                     lastUpdateTime = performance.now();
                     requestAnimationFrame(update);
                     startBtn.textContent = "暂停游戏";
-                    
-                    // Request fullscreen
-                    if (canvas.requestFullscreen) {
-                        canvas.requestFullscreen();
-                    } else if (canvas.mozRequestFullScreen) { /* Firefox */
-                        canvas.mozRequestFullScreen();
-                    } else if (canvas.webkitRequestFullscreen) { /* Chrome, Safari & Opera */
-                        canvas.webkitRequestFullscreen();
-                    } else if (canvas.msRequestFullscreen) { /* IE/Edge */
-                        canvas.msRequestFullscreen();
-                    }
+                    document.body.style.overflow = 'hidden'; // Prevent scrolling
                 } else {
                     gameRunning = !gameRunning;
                     if (gameRunning) {
@@ -1314,9 +1304,11 @@
                         requestAnimationFrame(update);
                         startBtn.textContent = "暂停游戏";
                         statusDiv.textContent = "游戏继续";
+                        document.body.style.overflow = 'hidden'; // Prevent scrolling
                     } else {
                         startBtn.textContent = "继续游戏";
                         statusDiv.textContent = "游戏已暂停";
+                        document.body.style.overflow = ''; // Restore scrolling
                     }
                 }
             });
@@ -1330,17 +1322,7 @@
                 requestAnimationFrame(update);
                 startBtn.textContent = "暂停游戏";
                 statusDiv.textContent = "游戏重新开始！";
-
-                // Request fullscreen
-                if (canvas.requestFullscreen) {
-                    canvas.requestFullscreen();
-                } else if (canvas.mozRequestFullScreen) { /* Firefox */
-                    canvas.mozRequestFullScreen();
-                } else if (canvas.webkitRequestFullscreen) { /* Chrome, Safari & Opera */
-                    canvas.webkitRequestFullscreen();
-                } else if (canvas.msRequestFullscreen) { /* IE/Edge */
-                    canvas.msRequestFullscreen();
-                }
+                document.body.style.overflow = 'hidden'; // Prevent scrolling
             });
             
             // // 减速按钮
