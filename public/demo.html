@@ -356,8 +356,8 @@
             const ctx = canvas.getContext('2d');
             const startBtn = document.getElementById('start-btn');
             const restartBtn = document.getElementById('restart-btn');
-            const slowBtn = document.getElementById('slow-btn');
-            const fastBtn = document.getElementById('fast-btn');
+            // const slowBtn = document.getElementById('slow-btn');
+            // const fastBtn = document.getElementById('fast-btn');
             const addPlayerBtn = document.getElementById('add-player-btn');
             const statusDiv = document.getElementById('status');
             const playersList = document.getElementById('players-list');
@@ -446,7 +446,7 @@
                 // 更新玩家列表显示
                 updatePlayersList();
                 
-                statusDiv.textContent = "游戏开始！使用方向键控制移动";
+                statusDiv.textContent = "游戏开始！使用方向键或滑动屏幕控制移动";
                 currentEffects.textContent = "无";
             }
             
@@ -1196,10 +1196,12 @@
                     gameRunning = false;
                     statusDiv.textContent = "所有玩家都失败了！游戏结束";
                     startBtn.textContent = "重新开始";
+                    if (document.fullscreenElement) document.exitFullscreen();
                 } else if (alivePlayers === 1 && Object.keys(players).length > 1) {
                     gameRunning = false;
                     statusDiv.textContent = `${lastAlivePlayer.name} 获胜！`;
                     startBtn.textContent = "重新开始";
+                    if (document.fullscreenElement) document.exitFullscreen();
                 }
             }
             
@@ -1238,6 +1240,54 @@
                 }
             });
             
+            // 触屏控制
+            let touchStartX = 0;
+            let touchStartY = 0;
+            let touchHandled = false;
+
+            canvas.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+                touchHandled = false;
+            }, { passive: false });
+
+            canvas.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                if (!gameRunning || touchHandled) return;
+
+                const touchEndX = e.touches[0].clientX;
+                const touchEndY = e.touches[0].clientY;
+
+                const dx = touchEndX - touchStartX;
+                const dy = touchEndY - touchStartY;
+
+                if (Math.abs(dx) > 20 || Math.abs(dy) > 20) {
+                    const player = players['player1'];
+                    if (!player.isAlive) return;
+
+                    const freezeEffect = player.effects.find(effect => effect.type === 'freeze');
+                    if (freezeEffect) return;
+
+                    if (Math.abs(dx) > Math.abs(dy)) {
+                        // Horizontal swipe
+                        if (dx > 0 && player.direction !== 'left') {
+                            player.nextDirection = 'right';
+                        } else if (dx < 0 && player.direction !== 'right') {
+                            player.nextDirection = 'left';
+                        }
+                    } else {
+                        // Vertical swipe
+                        if (dy > 0 && player.direction !== 'up') {
+                            player.nextDirection = 'down';
+                        } else if (dy < 0 && player.direction !== 'down') {
+                            player.nextDirection = 'up';
+                        }
+                    }
+                    touchHandled = true;
+                }
+            }, { passive: false });
+            
             // 开始游戏按钮
             startBtn.addEventListener('click', () => {
                 if (!gameRunning) {
@@ -1246,7 +1296,17 @@
                     lastUpdateTime = performance.now();
                     requestAnimationFrame(update);
                     startBtn.textContent = "暂停游戏";
-                    statusDiv.textContent = "游戏开始！使用方向键控制移动";
+                    
+                    // Request fullscreen
+                    if (canvas.requestFullscreen) {
+                        canvas.requestFullscreen();
+                    } else if (canvas.mozRequestFullScreen) { /* Firefox */
+                        canvas.mozRequestFullScreen();
+                    } else if (canvas.webkitRequestFullscreen) { /* Chrome, Safari & Opera */
+                        canvas.webkitRequestFullscreen();
+                    } else if (canvas.msRequestFullscreen) { /* IE/Edge */
+                        canvas.msRequestFullscreen();
+                    }
                 } else {
                     gameRunning = !gameRunning;
                     if (gameRunning) {
@@ -1270,29 +1330,40 @@
                 requestAnimationFrame(update);
                 startBtn.textContent = "暂停游戏";
                 statusDiv.textContent = "游戏重新开始！";
+
+                // Request fullscreen
+                if (canvas.requestFullscreen) {
+                    canvas.requestFullscreen();
+                } else if (canvas.mozRequestFullScreen) { /* Firefox */
+                    canvas.mozRequestFullScreen();
+                } else if (canvas.webkitRequestFullscreen) { /* Chrome, Safari & Opera */
+                    canvas.webkitRequestFullscreen();
+                } else if (canvas.msRequestFullscreen) { /* IE/Edge */
+                    canvas.msRequestFullscreen();
+                }
             });
             
-            // 减速按钮
-            slowBtn.addEventListener('click', () => {
-                for (let playerId in players) {
-                    const player = players[playerId];
-                    if (player.speed > 5) {
-                        player.speed -= 2;
-                    }
-                }
-                statusDiv.textContent = `速度降低: ${players['player1'].speed}`;
-            });
+            // // 减速按钮
+            // slowBtn.addEventListener('click', () => {
+            //     for (let playerId in players) {
+            //         const player = players[playerId];
+            //         if (player.speed > 5) {
+            //             player.speed -= 2;
+            //         }
+            //     }
+            //     statusDiv.textContent = `速度降低: ${players['player1'].speed}`;
+            // });
             
-            // 加速按钮
-            fastBtn.addEventListener('click', () => {
-                for (let playerId in players) {
-                    const player = players[playerId];
-                    if (player.speed < 20) {
-                        player.speed += 2;
-                    }
-                }
-                statusDiv.textContent = `速度增加: ${players['player1'].speed}`;
-            });
+            // // 加速按钮
+            // fastBtn.addEventListener('click', () => {
+            //     for (let playerId in players) {
+            //         const player = players[playerId];
+            //         if (player.speed < 20) {
+            //             player.speed += 2;
+            //         }
+            //     }
+            //     statusDiv.textContent = `速度增加: ${players['player1'].speed}`;
+            // });
             
             // 添加AI玩家按钮
             addPlayerBtn.addEventListener('click', () => {
