@@ -169,6 +169,12 @@
             color: rgba(255, 222, 89, 0.9);
             line-height: 1.2;
         }
+        .food-note {
+            margin-top: 12px;
+            font-size: 0.8rem;
+            color: rgba(255, 222, 89, 0.85);
+            line-height: 1.4;
+        }
         .controls {
             display: flex;
             flex-wrap: wrap;
@@ -403,79 +409,80 @@
                         <h2>食物类型</h2>
                         <span class="panel-toggle-indicator">+</span>
                     </div>
-                    <div class="food-item panel-content" aria-hidden="true">
-                        <div class="food-icon" style="background-color: #ff0000;">1</div>
-                        <div class="food-text">
-                            <span>普通食物</span>
-                            <small>增加体型并获得基础积分</small>
+                    <div class="foods-info-body panel-content" aria-hidden="true">
+                        <div class="food-item">
+                            <div class="food-icon" style="background-color: #ff0000;">1</div>
+                            <div class="food-text">
+                                <span>普通食物</span>
+                                <small>增加体型并获得基础积分</small>
+                            </div>
                         </div>
-                    </div>
-                    <div class="food-item panel-content" aria-hidden="true">
-                        <div class="food-icon" style="background-color: #00aaff;">2</div>
-                        <div class="food-text">
-                            <span>冰冻果实</span>
-                            <small>束缚目标 3 秒，需提前规划走位</small>
+                        <div class="food-item">
+                            <div class="food-icon" style="background-color: #00aaff;">2</div>
+                            <div class="food-text">
+                                <span>冰冻果实</span>
+                                <small>束缚目标 3 秒，需提前规划走位</small>
+                            </div>
                         </div>
-                    </div>
-                    <div class="food-item panel-content" aria-hidden="true">
-                        <div class="food-icon" style="background-color: #ff5500;">3</div>
-                        <div class="food-text">
-                            <span>加速辣椒</span>
-                            <small>5 秒疾速冲刺，追击或逃生首选</small>
+                        <div class="food-item">
+                            <div class="food-icon" style="background-color: #ff5500;">3</div>
+                            <div class="food-text">
+                                <span>加速辣椒</span>
+                                <small>5 秒疾速冲刺，追击或逃生首选</small>
+                            </div>
                         </div>
-                    </div>
-                    <div class="food-item panel-content" aria-hidden="true">
-                        <div class="food-icon" style="background-color: #aa00ff;">4</div>
-                        <div class="food-text">
-                            <span>缩小蘑菇</span>
-                            <small>瞬间瘦身 3 节，穿缝绕行更灵活</small>
+                        <div class="food-item">
+                            <div class="food-icon" style="background-color: #aa00ff;">4</div>
+                            <div class="food-text">
+                                <span>缩小蘑菇</span>
+                                <small>瞬间瘦身 3 节，穿缝绕行更灵活</small>
+                            </div>
                         </div>
-                    </div>
-                    <div class="food-item panel-content" aria-hidden="true">
-                        <div class="food-icon" style="background: linear-gradient(45deg, red, orange, yellow, green, blue, indigo, violet);">5</div>
-                        <div class="food-text">
-                            <span>彩虹糖果</span>
-                            <small>随机触发增益或减益，考验手气</small>
+                        <div class="food-item">
+                            <div class="food-icon" style="background: linear-gradient(45deg, red, orange, yellow, green, blue, indigo, violet);">5</div>
+                            <div class="food-text">
+                                <span>彩虹糖果</span>
+                                <small>随机触发增益或减益，考验手气</small>
+                            </div>
                         </div>
-                    </div>
-                    <div class="food-item panel-content" aria-hidden="true">
-                        <div class="food-icon" style="background: linear-gradient(45deg, #00ffaa, #00aaff);">6</div>
-                        <div class="food-text">
-                            <span>传送门</span>
-                            <small>瞬移至安全随机点，脱困反偷</small>
+                        <div class="food-item">
+                            <div class="food-icon" style="background: linear-gradient(45deg, #00ffaa, #00aaff);">6</div>
+                            <div class="food-text">
+                                <span>传送门</span>
+                                <small>瞬移至安全随机点，脱困反偷</small>
+                            </div>
                         </div>
-                    </div>
-                    <div class="food-item panel-content" aria-hidden="true">
-                        <div class="food-icon" style="background-color: #ffd700;">7</div>
-                        <div class="food-text">
-                            <span>复活甲</span>
-                            <small>死亡后原地复活并获得 3 秒无敌穿墙</small>
+                        <div class="food-item">
+                            <div class="food-icon" style="background-color: #ffd700;">7</div>
+                            <div class="food-text">
+                                <span>复活甲</span>
+                                <small>死亡后原地复活并获得 3 秒无敌穿墙</small>
+                            </div>
                         </div>
-                    </div>
-                    <div class="food-item panel-content" aria-hidden="true">
-                        <div class="food-icon" style="background-color: #00ff00;">8</div>
-                        <div class="food-text">
-                            <span>穿墙能力</span>
-                            <small>6 秒无视墙体，穿梭追击无压力</small>
+                        <div class="food-item">
+                            <div class="food-icon" style="background-color: #00ff00;">8</div>
+                            <div class="food-text">
+                                <span>穿墙能力</span>
+                                <small>6 秒无视墙体，穿梭追击无压力</small>
+                            </div>
                         </div>
-                    </div>
-                    <div class="food-item panel-content" aria-hidden="true">
-                        <div class="food-icon" style="background-color: #ffffff; color: black;">9</div>
-                        <div class="food-text">
-                            <span>无敌状态</span>
-                            <small>5 秒碰撞免疫，正面硬刚</small>
+                        <div class="food-item">
+                            <div class="food-icon" style="background-color: #ffffff; color: black;">9</div>
+                            <div class="food-text">
+                                <span>无敌状态</span>
+                                <small>5 秒碰撞免疫，正面硬刚</small>
+                            </div>
                         </div>
-                    </div>
-                    <div class="food-item panel-content" aria-hidden="true">
-                        <div class="food-icon" style="background-color: #ff00ff;">X</div>
-                        <div class="food-text">
-                            <span>磁铁</span>
-                            <small>8 秒吸附周围食物，靠近即可收入囊中</small>
+                        <div class="food-item">
+                            <div class="food-icon" style="background-color: #ff00ff;">X</div>
+                            <div class="food-text">
+                                <span>磁铁</span>
+                                <small>8 秒吸附周围食物，靠近即可收入囊中</small>
+                            </div>
                         </div>
-                    </div>
-                    <div class="panel-content" aria-hidden="true">
-                          食物会在一段时间后消失，注意食物上的计时条
-                撞到墙壁、其他蛇或自己的身体会导致游戏结束
+                        <div class="food-note">
+                            食物会在一段时间后消失，注意食物上的计时条。撞到墙壁、其他蛇或自己的身体会导致游戏结束。
+                        </div>
                     </div>
                      <!-- <li>食物会在一段时间后消失，注意食物上的计时条</li>
                 <li>撞到墙壁、其他蛇或自己的身体会导致游戏结束</li> -->
@@ -524,7 +531,7 @@
             const playersList = document.getElementById('players-list');
             const currentEffects = document.getElementById('current-effects');
             const touchOverlay = document.getElementById('touch-overlay');
-            const MAX_AI_PLAYERS = 1;
+            const MAX_AI_PLAYERS = 4;
 
             const collapsiblePanels = document.querySelectorAll('.collapsible-panel');
             collapsiblePanels.forEach(panel => {
@@ -1775,7 +1782,7 @@
 
             if (getAIPlayerCount() >= MAX_AI_PLAYERS) {
                 addPlayerBtn.disabled = true;
-                addPlayerBtn.textContent = "AI已添加";
+                addPlayerBtn.textContent = "AI已满";
                 addPlayerBtn.setAttribute('aria-disabled', 'true');
             }
 
@@ -1783,7 +1790,7 @@
             addPlayerBtn.addEventListener('click', () => {
                 unlockAudio();
                 if (getAIPlayerCount() >= MAX_AI_PLAYERS) {
-                    statusDiv.textContent = "AI玩家最多只能添加一个";
+                    statusDiv.textContent = "AI玩家最多只能添加四个";
                     return;
                 }
                 if (playerCount >= 6) {
@@ -1820,7 +1827,7 @@
 
                 if (getAIPlayerCount() >= MAX_AI_PLAYERS) {
                     addPlayerBtn.disabled = true;
-                    addPlayerBtn.textContent = "AI已添加";
+                    addPlayerBtn.textContent = "AI已满";
                     addPlayerBtn.setAttribute('aria-disabled', 'true');
                 }
             });

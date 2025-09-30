@@ -765,18 +765,20 @@ export default function SnakeGame() {
         <h2>玩家列表</h2>
         <span className="panel-toggle-indicator">{open ? '-' : '+'}</span>
       </div>
-      <div id="players-list" className={`panel-content${open ? ' panel-content-open' : ''}`} aria-hidden={!open}>
-        {players.map((player) => (
-          <div key={player.id} className={`player ${player.isAlive ? 'player-alive' : 'player-dead'}`}>
-            <div className="player-color" style={{ backgroundColor: player.color.replace('bg-', '').replace('-500', '') }}></div>
-            <span>{player.name}{player.id === currentPlayerId && ' (你)'}</span>
-            <span style={{ marginLeft: 'auto' }}>分数: {player.score}</span>
-            <span style={{ marginLeft: '12px' }}>复活甲: {player.reviveCharges ?? 0}</span>
-             {!player.isAlive && gameStarted && ' ☠️'}
-             {!gameStarted && (player.isReady ? ' ✅' : ' ❌')}
-          </div>
-        ))}
-      </div>
+      {open && (
+        <div id="players-list">
+          {players.map((player) => (
+            <div key={player.id} className={`player ${player.isAlive ? 'player-alive' : 'player-dead'}`}>
+              <div className="player-color" style={{ backgroundColor: player.color.replace('bg-', '').replace('-500', '') }}></div>
+              <span>{player.name}{player.id === currentPlayerId && ' (你)'}</span>
+              <span style={{ marginLeft: 'auto' }}>分数: {player.score}</span>
+              <span style={{ marginLeft: '12px' }}>复活甲: {player.reviveCharges ?? 0}</span>
+               {!player.isAlive && gameStarted && ' ☠️'}
+               {!gameStarted && (player.isReady ? ' ✅' : ' ❌')}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 
@@ -812,19 +814,21 @@ export default function SnakeGame() {
             <h2>食物类型</h2>
             <span className="panel-toggle-indicator">{open ? '-' : '+'}</span>
           </div>
-          <div className={`foods-info-body panel-content${open ? ' panel-content-open' : ''}`} aria-hidden={!open}>
-            {Object.values(FOOD_TYPES).map(food => (
-              <div className="food-item" key={food.id}>
-                  <div className="food-icon" style={{ background: food.color, color: food.id === 9 ? 'black' : 'white' }}>
-                      {food.id === 10 ? 'X' : food.id}
-                  </div>
-                  <div className="food-text">
-                    <span>{food.name}</span>
-                    {food.description && <small>{food.description}</small>}
-                  </div>
-              </div>
-            ))}
-          </div>
+          {open && (
+            <div className="foods-info-body">
+              {Object.values(FOOD_TYPES).map(food => (
+                <div className="food-item" key={food.id}>
+                    <div className="food-icon" style={{ background: food.color, color: food.id === 9 ? 'black' : 'white' }}>
+                        {food.id === 10 ? 'X' : food.id}
+                    </div>
+                    <div className="food-text">
+                      <span>{food.name}</span>
+                      {food.description && <small>{food.description}</small>}
+                    </div>
+                </div>
+              ))}
+            </div>
+          )}
       </div>
   );
 
