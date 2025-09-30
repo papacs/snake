@@ -85,8 +85,22 @@ const rooms = new Map<string, Room>();
 const GAME_SPEED = 250; // 稍微加快基础游戏速度
 const REVIVE_IMMUNITY_DURATION = 3000;
 const REVIVE_GHOST_DURATION = 3000;
+const MAX_ROOM_PLAYERS = 4;
 
 const colors = ["bg-green-500", "bg-blue-500", "bg-yellow-500", "bg-purple-500"];
+
+function getRoomSummaries() {
+    return Array.from(rooms.values()).map(room => ({
+        roomId: room.id,
+        playerCount: room.players.size,
+        capacity: MAX_ROOM_PLAYERS,
+        isJoinable: room.players.size < MAX_ROOM_PLAYERS && !room.gameStarted,
+    }));
+}
+
+function broadcastRoomList() {
+    io.emit('roomList', getRoomSummaries());
+}
 
 function generateFood(currentFoods: Food[], allSnakes: Position[][], gridSize: number): Food {
     let newFoodPos: Position = { x: 0, y: 0 }; // Initialize to avoid TS error
@@ -488,6 +502,7 @@ function startGameLoop(roomId: string) {
             // The winner is the player with the highest score.
             const winner = players.sort((a, b) => b.score - a.score)[0];
             io.to(roomId).emit('gameOver', winner);
+            broadcastRoomList();
         }
 
         io.to(roomId).emit('gameState', {
@@ -500,6 +515,7 @@ function startGameLoop(roomId: string) {
 
 io.on('connection', (socket) => {
   console.log(`User connected: ${socket.id}`);
+  socket.emit('roomList', getRoomSummaries());
 
   socket.on('createRoom', ({ playerName, gridSize }) => {
     const roomId = generateUniqueRoomId(); // 6位数字房间号
@@ -532,11 +548,12 @@ io.on('connection', (socket) => {
     socket.join(roomId);
     socket.emit('roomCreated', { roomId, playerId, isOwner: true });
     io.to(roomId).emit('updatePlayers', Array.from(room.players.values()));
+    broadcastRoomList();
   });
 
   socket.on('joinRoom', ({ roomId, playerName }) => {
     const room = rooms.get(roomId);
-    if (room && room.players.size < 4) {
+    if (room && room.players.size < MAX_ROOM_PLAYERS) {
       const playerId = socket.id;
       const colorIndex = getUniqueColorIndex(room.usedColors);
       const newPlayer: Player = {
@@ -558,6 +575,7 @@ io.on('connection', (socket) => {
       socket.join(roomId);
       socket.emit('joinedRoom', { roomId, playerId, isOwner: false });
       io.to(roomId).emit('updatePlayers', Array.from(room.players.values()));
+      broadcastRoomList();
     } else {
       socket.emit('error', 'Room not found or is full');
     }
@@ -601,8 +619,51 @@ io.on('connection', (socket) => {
         foods: room.foods,
         gridSize: room.gridSize 
       });
+      broadcastRoomList();
       startGameLoop(roomId);
     }
+  });
+
+  socket.on('leaveRoom', ({ roomId }) => {
+    const room = rooms.get(roomId);
+    if (!room) {
+      socket.emit('error', 'Room not found');
+      return;
+    }
+
+    const player = room.players.get(socket.id);
+    if (!player) {
+      socket.emit('error', 'You are not in this room');
+      return;
+    }
+
+    const colorIndex = getColorIndexFromColor(player.color);
+    if (colorIndex !== -1) {
+      room.usedColors.delete(colorIndex);
+    }
+
+    room.players.delete(socket.id);
+    socket.leave(roomId);
+
+    if (room.players.size === 0) {
+      if (room.gameLoop) {
+        clearInterval(room.gameLoop);
+        room.gameLoop = null;
+      }
+      rooms.delete(roomId);
+    } else {
+      if (room.ownerId === socket.id) {
+        room.ownerId = Array.from(room.players.keys())[0];
+      }
+      io.to(roomId).emit('updatePlayers', Array.from(room.players.values()));
+    }
+
+    socket.emit('leftRoom');
+    broadcastRoomList();
+  });
+
+  socket.on('requestRoomList', () => {
+    socket.emit('roomList', getRoomSummaries());
   });
 
   socket.on('changeDirection', ({ roomId, direction }) => {
@@ -634,11 +695,13 @@ io.on('connection', (socket) => {
         });
         io.to(roomId).emit('gameReset');
         io.to(roomId).emit('updatePlayers', Array.from(room.players.values()));
+        broadcastRoomList();
     }
   });
 
   socket.on('disconnect', () => {
     console.log(`User disconnected: ${socket.id}`);
+    let roomsChanged = false;
     rooms.forEach((room, roomId) => {
       if (room && room.players.has(socket.id)) {
         const disconnectedPlayer = room.players.get(socket.id);
@@ -659,8 +722,12 @@ io.on('connection', (socket) => {
           }
           io.to(roomId).emit('updatePlayers', Array.from(room.players.values()));
         }
+        roomsChanged = true;
       }
     });
+    if (roomsChanged) {
+      broadcastRoomList();
+    }
   });
 });
 

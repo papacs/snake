@@ -87,6 +87,13 @@ type Player = {
   reviveCharges: number;
 };
 
+type RoomSummary = {
+  roomId: string;
+  playerCount: number;
+  capacity: number;
+  isJoinable: boolean;
+};
+
 export default function SnakeGame() {
   // Multiplayer state
   const [multiplayerMode, setMultiplayerMode] = useState(false);
@@ -94,7 +101,8 @@ export default function SnakeGame() {
   const [playerId, setPlayerId] = useState("");
   const [isOwner, setIsOwner] = useState(false);
   const [players, setPlayers] = useState<Player[]>([]);
-  const [joinRoomId, setJoinRoomId] = useState("");
+  const [roomsSummary, setRoomsSummary] = useState<RoomSummary[]>([]);
+  const [roomError, setRoomError] = useState("");
 
   // Game state
   const [gridSize, setGridSize] = useState(17);
@@ -258,17 +266,21 @@ export default function SnakeGame() {
       setRoomId(roomId);
       setPlayerId(playerId);
       setIsOwner(isOwner);
+      setRoomError('');
     });
     socket.on('joinedRoom', ({ roomId, playerId, isOwner }) => {
       setRoomId(roomId);
       setPlayerId(playerId);
       setIsOwner(isOwner);
+      setRoomError('');
+      socket.emit('requestRoomList');
     });
     socket.on('updatePlayers', (updatedPlayers: Player[]) => setPlayers(updatedPlayers));
     socket.on('gameStarted', (initialGameState) => {
       setGameOver(false);
       setWinner(null);
       setGameStarted(true);
+      setRoomError('');
       if (initialGameState.gridSize) setGridSize(initialGameState.gridSize);
       if (initialGameState.players) setPlayers(initialGameState.players);
       if (initialGameState.foods) setFoods(initialGameState.foods);
@@ -292,10 +304,26 @@ export default function SnakeGame() {
       setGameOver(false);
       setWinner(null);
     });
-    socket.on('error', (message) => alert(message));
+    socket.on('roomList', (list: RoomSummary[]) => setRoomsSummary(list));
+    socket.on('leftRoom', () => {
+      setRoomId('');
+      setIsOwner(false);
+      setPlayers([]);
+      setGameStarted(false);
+      setGameOver(false);
+      setWinner(null);
+      setFoods([]);
+      setRoomError('');
+      socket.emit('requestRoomList');
+    });
+    socket.on('error', (message) => {
+      const text = typeof message === 'string' ? message : '发生错误';
+      setRoomError(text);
+    });
     socket.on('foodConsumed', handleFoodConsumed);
     socket.on('effectTriggered', handleEffectTriggered);
     socket.on('playerDied', handlePlayerDied);
+    socket.emit('requestRoomList');
   }, [playFoodSound, playGameOverSound, playEffectSound, unlockAudio]);
 
   useEffect(() => {
@@ -321,9 +349,10 @@ export default function SnakeGame() {
 
   const resetGame = useCallback(() => {
     if (multiplayerMode && isOwner) {
+      unlockAudio();
       socket?.emit('resetGame', { roomId });
     }
-  }, [multiplayerMode, isOwner, roomId]);
+  }, [multiplayerMode, isOwner, roomId, unlockAudio]);
 
   const navigateBackToMenu = useCallback(() => {
     if (socket) {
@@ -340,13 +369,14 @@ export default function SnakeGame() {
     setIsOwner(false);
     setPlayers([]);
     setFoods([]);
-    setJoinRoomId("");
+    setRoomsSummary([]);
+    setRoomError('');
   }, []);
 
   const startSinglePlayer = () => {
-    // 跳转到demo.html单人模式
+    // 跳转到单人模式页面
     unlockAudio();
-    window.location.href = `/demo.html?playerName=${encodeURIComponent(playerName)}`;
+    window.location.href = `/single-player.html?playerName=${encodeURIComponent(playerName)}`;
   };
 
   const changeDirection = useCallback((newDirection: "UP" | "DOWN" | "LEFT" | "RIGHT") => {
@@ -388,19 +418,36 @@ export default function SnakeGame() {
   }, [roomId, multiplayerMode, changeDirection, unlockAudio]);
 
   const createRoom = () => {
+    if (!playerName.trim()) {
+      setRoomError('请输入昵称后再创建房间');
+      return;
+    }
+    setRoomError('');
     unlockAudio();
     socket?.emit('createRoom', { playerName, gridSize });
   };
-  const joinRoom = () => {
-    if (!joinRoomId.trim()) return;
+  const joinRoomFromList = useCallback((targetRoomId: string, isJoinable: boolean) => {
+    if (!isJoinable) return;
+    if (!playerName.trim()) {
+      setRoomError('请输入昵称后再加入房间');
+      return;
+    }
+    setRoomError('');
     unlockAudio();
-    socket?.emit('joinRoom', { roomId: joinRoomId, playerName });
-  };
+    socket?.emit('joinRoom', { roomId: targetRoomId, playerName });
+  }, [playerName, unlockAudio]);
+  const leaveRoom = useCallback(() => {
+    if (!roomId) return;
+    unlockAudio();
+    socket?.emit('leaveRoom', { roomId });
+  }, [roomId, unlockAudio]);
   const readyUp = () => {
+    if (!roomId) return;
     unlockAudio();
     socket?.emit('playerReady', { roomId });
   };
   const startGame = () => {
+    if (!roomId) return;
     unlockAudio();
     socket?.emit('startGame', { roomId });
   };
@@ -886,34 +933,45 @@ export default function SnakeGame() {
           </div>
         </div>
       ) : !roomId && multiplayerMode ? (
-        <div className="flex flex-col gap-4 items-center">
+        <div className="flex flex-col gap-4 items-center w-full">
           <div className="flex gap-4">
-            <button onClick={createRoom}>
+            <button onClick={createRoom} disabled={!playerName.trim()}>
               创建房间
             </button>
             <button onClick={navigateBackToMenu}>
               返回
             </button>
           </div>
-          <div className="mt-4 text-center">或者</div>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={joinRoomId}
-              onChange={(e) => setJoinRoomId(e.target.value)}
-              placeholder="输入房间号"
-              className="px-4 py-2 border rounded"
-            />
-            <button onClick={joinRoom} disabled={!joinRoomId.trim()}>
-              加入房间
-            </button>
+          {!playerName.trim() && (
+            <div className="hint-text">请输入昵称后才能加入房间</div>
+          )}
+          {roomError && <div className="error-text">{roomError}</div>}
+          <div className="room-list">
+            {roomsSummary.length === 0 ? (
+              <div className="room-empty">暂无房间，快来创建第一个吧！</div>
+            ) : (
+              roomsSummary.map((summary) => {
+                const disabled = !summary.isJoinable || !playerName.trim();
+                return (
+                  <button
+                    key={summary.roomId}
+                    className={`room-card${disabled ? ' disabled' : ''}`}
+                    onClick={() => joinRoomFromList(summary.roomId, summary.isJoinable)}
+                    disabled={disabled}
+                  >
+                    <span>房间 {summary.roomId}</span>
+                    <span>{summary.playerCount}/{summary.capacity}</span>
+                  </button>
+                );
+              })
+            )}
           </div>
         </div>
       ) : gameStarted && !multiplayerMode ? (
-        // 不再显示React的单人模式，直接跳转到demo.html
+        // 不再显示React的单人模式，直接跳转到单人页面
         <div className="text-center">
           <p>正在加载单人模式游戏...</p>
-          <p>如果页面没有自动跳转，请<a href="/demo.html" className="text-blue-500 underline">点击这里</a></p>
+          <p>如果页面没有自动跳转，请<a href="/single-player.html" className="text-blue-500 underline">点击这里</a></p>
         </div>
       ) : (
         // Multiplayer Room View
@@ -941,6 +999,9 @@ export default function SnakeGame() {
                 />
             </div>
             <div className="sidebar">
+                <button className="room-leave-button" onClick={leaveRoom}>
+                  退出房间
+                </button>
                 {gameStarted && <EffectsPanel effects={currentPlayer?.effects || []} />}
                 
                 <PlayerList players={players} currentPlayerId={playerId} />
