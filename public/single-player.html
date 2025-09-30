@@ -51,32 +51,75 @@
             display: flex;
             flex-wrap: wrap;
             gap: clamp(16px, 3vw, 30px);
-            width: 100%;
+            width: min(100%, 1200px);
             justify-content: center;
+            align-items: flex-start;
+            margin: 0 auto;
         }
         #game-board {
             border: 3px solid #fff;
             border-radius: 10px;
             background-color: rgba(0, 0, 0, 0.7);
             box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-            max-width: min(100%, 640px);
+            max-width: min(100%, 820px);
             width: 100%;
             height: auto;
         }
+        .canvas-wrapper {
+            flex: 1 1 640px;
+            min-width: min(100%, 540px);
+            max-width: min(100%, 840px);
+            display: flex;
+            justify-content: center;
+        }
         .sidebar {
-            flex: 1 1 280px;
+            flex: 0 0 320px;
+            width: min(100%, 320px);
             display: flex;
             flex-direction: column;
             gap: 20px;
-            min-width: min(100%, 320px);
+            min-width: 260px;
         }
-        .players-panel {
+        .players-panel,
+        .foods-info,
+        .effects-panel {
             background: rgba(0, 0, 0, 0.7);
             border-radius: 10px;
             padding: 15px;
             border: 2px solid #fff;
         }
-        .players-panel h2 {
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            user-select: none;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+        .panel-header h2 {
+            margin: 0;
+            flex: 1;
+            text-align: left;
+            color: #ffde59;
+        }
+        .panel-toggle-indicator {
+            color: #ffde59;
+            font-size: 20px;
+            width: 20px;
+            text-align: center;
+            line-height: 1;
+        }
+        .panel-content {
+            display: none;
+        }
+        .panel-content-open {
+            display: block;
+        }
+        .collapsible-panel.closed {
+            overflow: hidden;
+        }
+        .effects-panel h2 {
             color: #ffde59;
             margin-bottom: 15px;
             text-align: center;
@@ -95,16 +138,8 @@
             border-radius: 50%;
             margin-right: 10px;
         }
-        .foods-info {
-            background: rgba(0, 0, 0, 0.7);
-            border-radius: 10px;
-            padding: 15px;
-            border: 2px solid #fff;
-        }
         .foods-info h2 {
             color: #ffde59;
-            margin-bottom: 15px;
-            text-align: center;
         }
         .food-item {
             display: flex;
@@ -293,8 +328,14 @@
                 max-width: 100%;
                 height: auto;
             }
-            .sidebar {
+            .canvas-wrapper {
                 width: 100%;
+                min-width: auto;
+            }
+            .sidebar {
+                flex: 1 1 auto;
+                width: 100%;
+                min-width: auto;
             }
             header {
                 align-items: stretch;
@@ -333,7 +374,9 @@
         </header>
         
         <div class="game-area">
-            <canvas id="game-board" width="600" height="500"></canvas>
+            <div class="canvas-wrapper">
+                <canvas id="game-board" width="640" height="640"></canvas>
+            </div>
             
             <div class="sidebar">
                 <div class="effects-panel">
@@ -341,9 +384,12 @@
                     <div id="current-effects">无</div>
                 </div>
 
-                <div class="players-panel">
-                    <h2>玩家列表</h2>
-                    <div id="players-list">
+                <div class="players-panel collapsible-panel open" data-panel="players">
+                    <div class="panel-header" role="button" tabindex="0" aria-expanded="true">
+                        <h2>玩家列表</h2>
+                        <span class="panel-toggle-indicator">-</span>
+                    </div>
+                    <div id="players-list" class="panel-content panel-content-open" aria-hidden="false">
                         <div class="player player-alive">
                             <div class="player-color" style="background-color: #ff3333;"></div>
                             <span>玩家1 (你)</span>
@@ -352,79 +398,82 @@
                     </div>
                 </div>
                 
-                <div class="foods-info">
-                    <h2>食物类型</h2>
-                    <div class="food-item">
+                <div class="foods-info collapsible-panel closed" data-panel="foods">
+                    <div class="panel-header" role="button" tabindex="0" aria-expanded="false">
+                        <h2>食物类型</h2>
+                        <span class="panel-toggle-indicator">+</span>
+                    </div>
+                    <div class="food-item panel-content" aria-hidden="true">
                         <div class="food-icon" style="background-color: #ff0000;">1</div>
                         <div class="food-text">
                             <span>普通食物</span>
                             <small>增加体型并获得基础积分</small>
                         </div>
                     </div>
-                    <div class="food-item">
+                    <div class="food-item panel-content" aria-hidden="true">
                         <div class="food-icon" style="background-color: #00aaff;">2</div>
                         <div class="food-text">
                             <span>冰冻果实</span>
                             <small>束缚目标 3 秒，需提前规划走位</small>
                         </div>
                     </div>
-                    <div class="food-item">
+                    <div class="food-item panel-content" aria-hidden="true">
                         <div class="food-icon" style="background-color: #ff5500;">3</div>
                         <div class="food-text">
                             <span>加速辣椒</span>
                             <small>5 秒疾速冲刺，追击或逃生首选</small>
                         </div>
                     </div>
-                    <div class="food-item">
+                    <div class="food-item panel-content" aria-hidden="true">
                         <div class="food-icon" style="background-color: #aa00ff;">4</div>
                         <div class="food-text">
                             <span>缩小蘑菇</span>
                             <small>瞬间瘦身 3 节，穿缝绕行更灵活</small>
                         </div>
                     </div>
-                    <div class="food-item">
+                    <div class="food-item panel-content" aria-hidden="true">
                         <div class="food-icon" style="background: linear-gradient(45deg, red, orange, yellow, green, blue, indigo, violet);">5</div>
                         <div class="food-text">
                             <span>彩虹糖果</span>
                             <small>随机触发增益或减益，考验手气</small>
                         </div>
                     </div>
-                    <div class="food-item">
+                    <div class="food-item panel-content" aria-hidden="true">
                         <div class="food-icon" style="background: linear-gradient(45deg, #00ffaa, #00aaff);">6</div>
                         <div class="food-text">
                             <span>传送门</span>
                             <small>瞬移至安全随机点，脱困反偷</small>
                         </div>
                     </div>
-                    <div class="food-item">
+                    <div class="food-item panel-content" aria-hidden="true">
                         <div class="food-icon" style="background-color: #ffd700;">7</div>
                         <div class="food-text">
                             <span>复活甲</span>
                             <small>死亡后原地复活并获得 3 秒无敌穿墙</small>
                         </div>
                     </div>
-                    <div class="food-item">
+                    <div class="food-item panel-content" aria-hidden="true">
                         <div class="food-icon" style="background-color: #00ff00;">8</div>
                         <div class="food-text">
                             <span>穿墙能力</span>
                             <small>6 秒无视墙体，穿梭追击无压力</small>
                         </div>
                     </div>
-                    <div class="food-item">
+                    <div class="food-item panel-content" aria-hidden="true">
                         <div class="food-icon" style="background-color: #ffffff; color: black;">9</div>
                         <div class="food-text">
                             <span>无敌状态</span>
                             <small>5 秒碰撞免疫，正面硬刚</small>
                         </div>
                     </div>
-                    <div class="food-item">
+                    <div class="food-item panel-content" aria-hidden="true">
                         <div class="food-icon" style="background-color: #ff00ff;">X</div>
                         <div class="food-text">
                             <span>磁铁</span>
                             <small>8 秒吸附周围食物，靠近即可收入囊中</small>
                         </div>
                     </div>
-                    <div>
+                    <div class="panel-content" aria-hidden="true">
                           食物会在一段时间后消失，注意食物上的计时条
                 撞到墙壁、其他蛇或自己的身体会导致游戏结束
                     </div>
@@ -475,6 +524,44 @@
             const playersList = document.getElementById('players-list');
             const currentEffects = document.getElementById('current-effects');
             const touchOverlay = document.getElementById('touch-overlay');
+            const MAX_AI_PLAYERS = 1;
+
+            const collapsiblePanels = document.querySelectorAll('.collapsible-panel');
+            collapsiblePanels.forEach(panel => {
+                const header = panel.querySelector('.panel-header');
+                if (!header) return;
+                const indicator = panel.querySelector('.panel-toggle-indicator');
+                const contents = panel.querySelectorAll('.panel-content');
+
+                const setState = (open) => {
+                    panel.classList.toggle('open', open);
+                    panel.classList.toggle('closed', !open);
+                    header.setAttribute('aria-expanded', open ? 'true' : 'false');
+                    contents.forEach(content => {
+                        content.classList.toggle('panel-content-open', open);
+                        content.setAttribute('aria-hidden', open ? 'false' : 'true');
+                    });
+                    if (indicator) {
+                        indicator.textContent = open ? '-' : '+';
+                    }
+                };
+
+                const initialOpen = panel.classList.contains('open');
+                setState(initialOpen);
+
+                const toggle = () => {
+                    setState(!panel.classList.contains('open'));
+                };
+
+                header.addEventListener('click', toggle);
+                header.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        toggle();
+                    }
+                });
+            });
+
             const REVIVE_INVINCIBLE_DURATION = 3000;
             const FOOD_TYPES = {
                 NORMAL: { id: 1, color: '#ff0000', score: 1, length: 1, lifetime: 10000, name: "普通食物", description: "增加体型并获得基础积分" },
@@ -1684,20 +1771,32 @@
             //     statusDiv.textContent = `速度增加: ${players['player1'].speed}`;
             // });
             
+            const getAIPlayerCount = () => Object.values(players).filter(player => player.isAI).length;
+
+            if (getAIPlayerCount() >= MAX_AI_PLAYERS) {
+                addPlayerBtn.disabled = true;
+                addPlayerBtn.textContent = "AI已添加";
+                addPlayerBtn.setAttribute('aria-disabled', 'true');
+            }
+
             // 添加AI玩家按钮
             addPlayerBtn.addEventListener('click', () => {
                 unlockAudio();
+                if (getAIPlayerCount() >= MAX_AI_PLAYERS) {
+                    statusDiv.textContent = "AI玩家最多只能添加一个";
+                    return;
+                }
                 if (playerCount >= 6) {
                     statusDiv.textContent = "最多只能有6个玩家";
                     return;
                 }
-                
+
                 const playerId = `player${++playerCount}`;
                 const colors = ['#33ff33', '#3333ff', '#ff33ff', '#33ffff', '#ffff33'];
                 const headColors = ['#66ff66', '#6666ff', '#ff66ff', '#66ffff', '#ffff66'];
                 const color = colors[(playerCount - 2) % colors.length];
                 const headColor = headColors[(playerCount - 2) % headColors.length];
-                
+
                 players[playerId] = {
                     id: playerId,
                     name: `玩家${playerCount}`,
@@ -1714,10 +1813,16 @@
                     pendingMagnet: 0,
                     isAI: true
                 };
-                
+
                 initGame();
                 updatePlayersList();
-                statusDiv.textContent = `已添加AI玩家${playerCount}`;
+                statusDiv.textContent = `${players[playerId].name} 已加入战局`;
+
+                if (getAIPlayerCount() >= MAX_AI_PLAYERS) {
+                    addPlayerBtn.disabled = true;
+                    addPlayerBtn.textContent = "AI已添加";
+                    addPlayerBtn.setAttribute('aria-disabled', 'true');
+                }
             });
             
             // 初始绘制

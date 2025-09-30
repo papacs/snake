@@ -1,6 +1,5 @@
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import { v4 as uuidv4 } from 'uuid';
 
 // 生成6位随机数字的房间号
 function generateRoomId(): string {
@@ -47,7 +46,7 @@ type Effect = {
     type: 'freeze' | 'speed' | 'ghost' | 'invincible' | 'magnet' | 'shrink' | 'grow' | 'teleport' | 'revive';
     duration: number;
     // 可选的额外信息
-    [key: string]: any; 
+    [key: string]: unknown;
 };
 
 type Food = Position & {

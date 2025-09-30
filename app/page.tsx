@@ -133,9 +133,13 @@ export default function SnakeGame() {
     if (typeof window === 'undefined') return;
 
     const computeCellSize = () => {
-      const availableWidth = Math.min(window.innerWidth, 960);
-      const candidate = Math.floor((availableWidth - 80) / gridSize);
-      const nextSize = Math.min(32, Math.max(16, candidate));
+      const hasRoomForSidebar = window.innerWidth > 900;
+      const sidebarAllowance = hasRoomForSidebar ? 340 : 0;
+      const paddingAllowance = hasRoomForSidebar ? 120 : 60;
+      const rawAvailable = window.innerWidth - sidebarAllowance - paddingAllowance;
+      const availableWidth = Math.max(320, Math.min(rawAvailable, 1024));
+      const candidate = Math.floor(availableWidth / gridSize);
+      const nextSize = Math.min(36, Math.max(18, candidate));
       setCellSize(nextSize);
     };
 
@@ -148,7 +152,7 @@ export default function SnakeGame() {
   const currentPlayer = players.find(p => p.id === playerId);
   const canNavigateBack = multiplayerMode || roomId || gameStarted;
   const canvasPixelSize = gridSize * cellSize + 40;
-  const canvasMaxWidth = Math.min(canvasPixelSize, 720);
+  const canvasMaxWidth = Math.min(canvasPixelSize, 820);
 
   const foodAudioRefs = useRef<Record<number, HTMLAudioElement>>({});
   const winSoundRef = useRef<HTMLAudioElement>(null);
@@ -219,11 +223,13 @@ export default function SnakeGame() {
             audio.pause();
             audio.currentTime = 0;
             audio.muted = false;
-          }).catch(() => {
+          }).catch((err) => {
+            console.warn('音频预加载失败', err);
             audio.muted = false;
           });
         }
       } catch (error) {
+        console.warn('音频预加载失败', error);
         audio.muted = false;
       }
     });
@@ -742,7 +748,7 @@ export default function SnakeGame() {
     open: boolean;
     onToggle: () => void;
   }) => (
-    <div className={`players-panel${open ? ' players-panel-open' : ' players-panel-closed'}`}>
+    <div className={`players-panel collapsible-panel${open ? ' open' : ' closed'}`}>
       <div
         className="panel-header"
         onClick={onToggle}
@@ -754,24 +760,23 @@ export default function SnakeGame() {
         }}
         role="button"
         tabIndex={0}
+        aria-expanded={open}
       >
         <h2>玩家列表</h2>
         <span className="panel-toggle-indicator">{open ? '-' : '+'}</span>
       </div>
-      {open && (
-        <div id="players-list">
-          {players.map((player) => (
-            <div key={player.id} className={`player ${player.isAlive ? 'player-alive' : 'player-dead'}`}>
-              <div className="player-color" style={{ backgroundColor: player.color.replace('bg-', '').replace('-500', '') }}></div>
-              <span>{player.name}{player.id === currentPlayerId && ' (你)'}</span>
-              <span style={{ marginLeft: 'auto' }}>分数: {player.score}</span>
-              <span style={{ marginLeft: '12px' }}>复活甲: {player.reviveCharges ?? 0}</span>
-               {!player.isAlive && gameStarted && ' ☠️'}
-               {!gameStarted && (player.isReady ? ' ✅' : ' ❌')}
-            </div>
-          ))}
-        </div>
-      )}
+      <div id="players-list" className={`panel-content${open ? ' panel-content-open' : ''}`} aria-hidden={!open}>
+        {players.map((player) => (
+          <div key={player.id} className={`player ${player.isAlive ? 'player-alive' : 'player-dead'}`}>
+            <div className="player-color" style={{ backgroundColor: player.color.replace('bg-', '').replace('-500', '') }}></div>
+            <span>{player.name}{player.id === currentPlayerId && ' (你)'}</span>
+            <span style={{ marginLeft: 'auto' }}>分数: {player.score}</span>
+            <span style={{ marginLeft: '12px' }}>复活甲: {player.reviveCharges ?? 0}</span>
+             {!player.isAlive && gameStarted && ' ☠️'}
+             {!gameStarted && (player.isReady ? ' ✅' : ' ❌')}
+          </div>
+        ))}
+      </div>
     </div>
   );
 
@@ -790,7 +795,7 @@ export default function SnakeGame() {
   );
 
   const FoodInfoPanel = ({ open, onToggle }: { open: boolean; onToggle: () => void }) => (
-      <div className={`foods-info${open ? ' foods-info-open' : ' foods-info-closed'}`}>
+      <div className={`foods-info collapsible-panel${open ? ' open' : ' closed'}`}>
           <div
             className="panel-header foods-info-header"
             onClick={onToggle}
@@ -802,25 +807,24 @@ export default function SnakeGame() {
             }}
             role="button"
             tabIndex={0}
+            aria-expanded={open}
           >
             <h2>食物类型</h2>
             <span className="panel-toggle-indicator">{open ? '-' : '+'}</span>
           </div>
-          {open && (
-            <div className="foods-info-body">
-              {Object.values(FOOD_TYPES).map(food => (
-                <div className="food-item" key={food.id}>
-                    <div className="food-icon" style={{ background: food.color, color: food.id === 9 ? 'black' : 'white' }}>
-                        {food.id === 10 ? 'X' : food.id}
-                    </div>
-                    <div className="food-text">
-                      <span>{food.name}</span>
-                      {food.description && <small>{food.description}</small>}
-                    </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <div className={`foods-info-body panel-content${open ? ' panel-content-open' : ''}`} aria-hidden={!open}>
+            {Object.values(FOOD_TYPES).map(food => (
+              <div className="food-item" key={food.id}>
+                  <div className="food-icon" style={{ background: food.color, color: food.id === 9 ? 'black' : 'white' }}>
+                      {food.id === 10 ? 'X' : food.id}
+                  </div>
+                  <div className="food-text">
+                    <span>{food.name}</span>
+                    {food.description && <small>{food.description}</small>}
+                  </div>
+              </div>
+            ))}
+          </div>
       </div>
   );
 
@@ -881,7 +885,7 @@ export default function SnakeGame() {
       touchOverlay.removeEventListener('touchstart', handleTouchStart);
       touchOverlay.removeEventListener('touchmove', handleTouchMove);
     };
-  }, [gameStarted, currentPlayer, changeDirection]);
+  }, [gameStarted, currentPlayer, changeDirection, unlockAudio]);
 
   // Prevent scrolling during gameplay
   useEffect(() => {

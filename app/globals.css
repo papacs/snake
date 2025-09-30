@@ -55,8 +55,10 @@ h1 {
     display: flex;
     flex-wrap: wrap;
     gap: clamp(16px, 3vw, 30px);
-    width: 100%;
+    width: min(100%, 1200px);
     justify-content: center;
+    align-items: flex-start;
+    margin: 0 auto;
 }
 #game-board {
     border: 3px solid #fff;
@@ -64,17 +66,20 @@ h1 {
     background-color: rgba(0, 0, 0, 0.7);
     box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
     display: grid; /* Ensure it works with React's grid layout */
-    max-width: min(100%, 720px);
+    max-width: min(100%, 820px);
     width: 100%;
     height: auto;
 }
 .canvas-wrapper {
-    flex: 1 1 520px;
+    flex: 1 1 640px;
+    min-width: min(100%, 540px);
+    max-width: min(100%, 840px);
     display: flex;
     justify-content: center;
 }
 .sidebar {
-    flex: 0 1 320px;
+    flex: 0 0 320px;
+    width: min(100%, 320px);
     display: flex;
     flex-direction: column;
     gap: 20px;
@@ -87,14 +92,7 @@ h1 {
     border: 2px solid #fff;
 }
 .foods-info {
-    transition: max-height 0.3s ease;
     overflow: hidden;
-}
-.foods-info-closed {
-    max-height: 58px;
-}
-.foods-info-open {
-    max-height: 520px;
 }
 .foods-info-header {
     padding-bottom: 6px;
@@ -131,15 +129,14 @@ h1 {
     text-align: center;
     line-height: 1;
 }
-.players-panel {
-    transition: max-height 0.3s ease;
+.panel-content {
+    display: none;
+}
+.panel-content-open {
+    display: block;
+}
+.collapsible-panel.closed {
     overflow: hidden;
-}
-.players-panel-open {
-    max-height: 480px;
-}
-.players-panel-closed {
-    max-height: 58px;
 }
 .player {
     display: flex;
@@ -344,11 +341,13 @@ button:disabled {
         max-width: 100%;
         height: auto;
     }
-    .canvas-wrapper,
-    .sidebar {
+    .canvas-wrapper {
         width: 100%;
+        min-width: auto;
     }
     .sidebar {
+        flex: 1 1 auto;
+        width: 100%;
         min-width: auto;
     }
     .container {
