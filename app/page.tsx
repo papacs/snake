@@ -282,7 +282,7 @@ export default function SnakeGame() {
       setPlayerId(playerId);
       setIsOwner(isOwner);
       setRoomError('');
-      socket.emit('requestRoomList');
+      socket?.emit('requestRoomList');
     });
     socket.on('updatePlayers', (updatedPlayers: Player[]) => setPlayers(updatedPlayers));
     socket.on('gameStarted', (initialGameState) => {
@@ -323,7 +323,7 @@ export default function SnakeGame() {
       setWinner(null);
       setFoods([]);
       setRoomError('');
-      socket.emit('requestRoomList');
+      socket?.emit('requestRoomList');
     });
     socket.on('error', (message) => {
       const text = typeof message === 'string' ? message : '发生错误';
@@ -332,7 +332,7 @@ export default function SnakeGame() {
     socket.on('foodConsumed', handleFoodConsumed);
     socket.on('effectTriggered', handleEffectTriggered);
     socket.on('playerDied', handlePlayerDied);
-    socket.emit('requestRoomList');
+    socket?.emit('requestRoomList');
   }, [playFoodSound, playGameOverSound, playEffectSound, unlockAudio]);
 
   useEffect(() => {
@@ -391,7 +391,7 @@ export default function SnakeGame() {
   const changeDirection = useCallback((newDirection: "UP" | "DOWN" | "LEFT" | "RIGHT") => {
     if (multiplayerMode) {
       if (socket && roomId) {
-        socket.emit('changeDirection', { roomId, direction: newDirection });
+        socket?.emit('changeDirection', { roomId, direction: newDirection });
       }
     } else {
       setPlayers(prevPlayers => {
