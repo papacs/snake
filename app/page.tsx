@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 
-let socket: Socket;
+let socket: Socket | null = null;
 
 type Position = {
   x: number;
@@ -26,6 +26,17 @@ type Effect = {
     type: 'freeze' | 'speed' | 'ghost' | 'invincible' | 'magnet' | 'shrink' | 'grow' | 'teleport';
     duration: number;
     [key: string]: unknown; 
+};
+
+const EFFECT_LABELS: Record<Effect['type'], string> = {
+    freeze: "冰冻",
+    speed: "加速",
+    ghost: "穿墙",
+    invincible: "无敌",
+    magnet: "磁铁",
+    shrink: "缩小",
+    grow: "变长",
+    teleport: "传送",
 };
 
 type Food = Position & {
@@ -56,7 +67,7 @@ export default function SnakeGame() {
 
   // Game state
   const [gridSize, setGridSize] = useState(17);
-  const CELL_SIZE = 20;
+  const [cellSize, setCellSize] = useState(28);
 
   const [playerName, setPlayerName] = useState("");
   const [gameStarted, setGameStarted] = useState(false);
@@ -80,8 +91,26 @@ export default function SnakeGame() {
   const touchStartYRef = useRef<number>(0);
   const touchHandledRef = useRef<boolean>(false);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const computeCellSize = () => {
+      const availableWidth = Math.min(window.innerWidth, 960);
+      const candidate = Math.floor((availableWidth - 80) / gridSize);
+      const nextSize = Math.min(32, Math.max(16, candidate));
+      setCellSize(nextSize);
+    };
+
+    computeCellSize();
+    window.addEventListener('resize', computeCellSize);
+    return () => window.removeEventListener('resize', computeCellSize);
+  }, [gridSize]);
+
   // Current player
   const currentPlayer = players.find(p => p.id === playerId);
+  const canNavigateBack = multiplayerMode || roomId || gameStarted;
+  const canvasPixelSize = gridSize * cellSize + 40;
+  const canvasMaxWidth = Math.min(canvasPixelSize, 720);
 
   const socketInitializer = useCallback(() => {
     // --- DEBUG LINE ---
@@ -133,7 +162,8 @@ export default function SnakeGame() {
       socketInitializer();
     }
     return () => {
-      if (socket) socket.disconnect();
+      socket?.disconnect();
+      socket = null;
     };
   }, [multiplayerMode, playerName, socketInitializer]);
 
@@ -155,9 +185,26 @@ export default function SnakeGame() {
   
   const resetGame = useCallback(() => {
     if (multiplayerMode && isOwner) {
-      socket.emit('resetGame', { roomId });
+      socket?.emit('resetGame', { roomId });
     }
   }, [multiplayerMode, isOwner, roomId]);
+
+  const navigateBackToMenu = useCallback(() => {
+    if (socket) {
+      socket.disconnect();
+      socket = null;
+    }
+    setGameStarted(false);
+    setGameOver(false);
+    setWinner(null);
+    setMultiplayerMode(false);
+    setRoomId("");
+    setPlayerId("");
+    setIsOwner(false);
+    setPlayers([]);
+    setFoods([]);
+    setJoinRoomId("");
+  }, []);
 
   const startSinglePlayer = () => {
     // 跳转到demo.html单人模式
@@ -201,13 +248,13 @@ export default function SnakeGame() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [roomId, multiplayerMode, changeDirection]);
 
-  const createRoom = () => socket.emit('createRoom', { playerName, gridSize });
+  const createRoom = () => socket?.emit('createRoom', { playerName, gridSize });
   const joinRoom = () => {
     if (!joinRoomId.trim()) return;
-    socket.emit('joinRoom', { roomId: joinRoomId, playerName });
+    socket?.emit('joinRoom', { roomId: joinRoomId, playerName });
   };
-  const readyUp = () => socket.emit('playerReady', { roomId });
-  const startGame = () => socket.emit('startGame', { roomId });
+  const readyUp = () => socket?.emit('playerReady', { roomId });
+  const startGame = () => socket?.emit('startGame', { roomId });
 
   // Canvas drawing functions
   const drawGame = useCallback(() => {
@@ -500,9 +547,12 @@ export default function SnakeGame() {
     <div className="effects-panel">
         <h2>当前效果</h2>
         <div id="current-effects">
-            {effects.length > 0 ? effects.map((effect, index) => (
-                <div key={index}>{effect.type} - {Math.ceil(effect.duration / 1000)}s</div>
-            )) : '无'}
+            {effects.length > 0 ? effects.map((effect, index) => {
+                const effectLabel = EFFECT_LABELS[effect.type] ?? effect.type;
+                return (
+                    <div key={index}>{effectLabel} - {Math.ceil(effect.duration / 1000)}秒</div>
+                );
+            }) : '无'}
         </div>
     </div>
   );
@@ -613,7 +663,14 @@ export default function SnakeGame() {
         }}
       />
       <header>
-        <h1>贪吃蛇大作战</h1>
+        <div className="w-full flex flex-wrap items-center justify-between gap-4">
+          <h1>贪吃蛇大作战</h1>
+          {canNavigateBack && (
+            <button onClick={navigateBackToMenu}>
+              返回上一页
+            </button>
+          )}
+        </div>
         {roomId && <div className="status">房间号: {roomId}</div>}
       </header>
       
@@ -643,7 +700,7 @@ export default function SnakeGame() {
             <button onClick={createRoom}>
               创建房间
             </button>
-            <button onClick={() => { setGameStarted(false); setMultiplayerMode(false); }}>
+            <button onClick={navigateBackToMenu}>
               返回
             </button>
           </div>
@@ -681,10 +738,15 @@ export default function SnakeGame() {
                 <canvas
                   ref={canvasRef}
                   id="game-board"
-                  width={gridSize * CELL_SIZE + 40}
-                  height={gridSize * CELL_SIZE + 40}
+                  width={canvasPixelSize}
+                  height={canvasPixelSize}
                   className="border border-white rounded"
-                  style={{ backgroundColor: 'rgba(0, 0, 0, 0.8)' }}
+                  style={{
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    width: '100%',
+                    maxWidth: `${canvasMaxWidth}px`,
+                    height: 'auto'
+                  }}
                 />
             </div>
             <div className="sidebar">
@@ -693,7 +755,7 @@ export default function SnakeGame() {
                 <PlayerList players={players} currentPlayerId={playerId} />
 
                 {!gameStarted && !gameOver && (
-                    <div className="controls flex-col items-center gap-4 mt-4">
+                    <div className="controls-stack flex flex-col items-center gap-4 mt-4">
                         <button onClick={readyUp}>
                           {players.find(p => p.id === playerId)?.isReady ? '取消准备' : '准备'}
                         </button>

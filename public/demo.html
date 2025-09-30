@@ -17,8 +17,8 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
-            padding: 20px;
+            justify-content: flex-start;
+            padding: clamp(16px, 3vw, 40px);
             color: white;
         }
         .container {
@@ -26,35 +26,49 @@
             flex-direction: column;
             align-items: center;
             gap: 20px;
-            max-width: 1200px;
-            width: 100%;
+            width: min(100%, 1200px);
         }
         header {
-            text-align: center;
-            margin-bottom: 10px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .top-bar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
         }
         h1 {
-            font-size: 2.8rem;
+            font-size: clamp(2rem, 4vw, 2.8rem);
             text-shadow: 3px 3px 0 #000;
             margin-bottom: 10px;
             color: #ffde59;
         }
         .game-area {
             display: flex;
-            gap: 30px;
+            flex-wrap: wrap;
+            gap: clamp(16px, 3vw, 30px);
             width: 100%;
+            justify-content: center;
         }
         #game-board {
             border: 3px solid #fff;
             border-radius: 10px;
             background-color: rgba(0, 0, 0, 0.7);
             box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            max-width: min(100%, 640px);
+            width: 100%;
+            height: auto;
         }
         .sidebar {
-            flex: 1;
+            flex: 1 1 280px;
             display: flex;
             flex-direction: column;
             gap: 20px;
+            min-width: min(100%, 320px);
         }
         .players-panel {
             background: rgba(0, 0, 0, 0.7);
@@ -134,6 +148,14 @@
             transform: translateY(4px);
             box-shadow: none;
         }
+        button:disabled {
+            background: #999;
+            cursor: not-allowed;
+            box-shadow: 0 4px 0 #666;
+        }
+        .controls button {
+            flex: 1 1 140px;
+        }
         .instructions {
             background: rgba(0, 0, 0, 0.7);
             border-radius: 10px;
@@ -202,6 +224,19 @@
             border-left: 4px solid #ff0000;
             opacity: 0.7;
         }
+        .back-button {
+            background: linear-gradient(to bottom, #ffffff, #d7d7d7);
+            color: #222;
+            box-shadow: 0 4px 0 #9b9b9b;
+        }
+        .back-button:hover {
+            transform: translateY(2px);
+            box-shadow: 0 2px 0 #9b9b9b;
+        }
+        .back-button:active {
+            transform: translateY(4px);
+            box-shadow: none;
+        }
         .food-preview {
             display: flex;
             flex-wrap: wrap;
@@ -250,9 +285,27 @@
             .sidebar {
                 width: 100%;
             }
+            header {
+                align-items: stretch;
+            }
             .controls {
-                order: -1; /* Move to the top of the sidebar */
+                order: -1;
                 margin-bottom: 20px;
+            }
+            .controls button {
+                flex: 1 1 45%;
+            }
+        }
+        @media (max-width: 520px) {
+            body {
+                padding: clamp(12px, 5vw, 24px);
+            }
+            .controls button {
+                flex: 1 1 100%;
+            }
+            .top-bar {
+                flex-direction: column;
+                align-items: stretch;
             }
         }
     </style>
@@ -261,7 +314,10 @@
     <div id="touch-overlay"></div>
     <div class="container">
         <header>
-            <h3>贪吃蛇大冒险</h3>
+            <div class="top-bar">
+                <h1>贪吃蛇大冒险</h1>
+                <button id="back-btn" class="back-button">返回主页</button>
+            </div>
             <div class="status" id="status">准备开始游戏...</div>
         </header>
         
@@ -374,6 +430,11 @@
             const playersList = document.getElementById('players-list');
             const currentEffects = document.getElementById('current-effects');
             const touchOverlay = document.getElementById('touch-overlay');
+            const backBtn = document.getElementById('back-btn');
+
+            backBtn.addEventListener('click', () => {
+                window.location.href = "/";
+            });
             
             // 游戏配置
             const gridSize = 20;
@@ -396,6 +457,8 @@
             };
             
             // 玩家数据 - 默认只有玩家1
+            const DEFAULT_SPEED = 6;
+
             let players = {
                 'player1': {
                     id: 'player1',
@@ -408,7 +471,7 @@
                     score: 0,
                     effects: [],
                     isAlive: true,
-                    speed: 8, // 初始速度 (帧/秒)
+                    speed: DEFAULT_SPEED, // 初始速度 (帧/秒)
                     isAI: false
                 }
             };
@@ -446,7 +509,7 @@
                     player.score = 0;
                     player.effects = [];
                     player.isAlive = true;
-                    player.speed = 8;
+                    player.speed = DEFAULT_SPEED;
                     
                     i++;
                 }
@@ -532,7 +595,8 @@
                 
                 // 根据玩家速度计算更新间隔
                 const player = players['player1'];
-                const updateInterval = 1000 / player.speed;
+                const effectiveSpeed = Math.max(2, player ? player.speed : DEFAULT_SPEED);
+                const updateInterval = 1000 / effectiveSpeed;
                 
                 if (deltaTime > updateInterval) {
                     // 更新食物生命周期
@@ -659,7 +723,7 @@
                             if (player.effects[i].duration <= 0) {
                                 // 移除效果
                                 if (player.effects[i].type === 'speed') {
-                                    player.speed = 8; // 恢复默认速度
+                                    player.speed = DEFAULT_SPEED; // 恢复默认速度
                                 }
                                 player.effects.splice(i, 1);
                             }
@@ -814,7 +878,7 @@
                         });
                         break;
                     case 'speed':
-                        player.speed *= foodType.speedMultiplier;
+                        player.speed = Math.min(player.speed * foodType.speedMultiplier, DEFAULT_SPEED * 2);
                         player.effects.push({
                             type: 'speed',
                             duration: foodType.duration,
@@ -847,7 +911,7 @@
                                 });
                                 break;
                             case 'speed':
-                                player.speed *= 1.5;
+                                player.speed = Math.min(player.speed * 1.5, DEFAULT_SPEED * 2);
                                 player.effects.push({
                                     type: 'speed',
                                     duration: 3000,
@@ -1214,6 +1278,48 @@
             }
             
             // 触屏控制
+            const keyDirectionGuard = (player, desiredDirection) => {
+                const normalized = desiredDirection.toLowerCase();
+                if (normalized === 'up' && player.direction !== 'down') {
+                    player.nextDirection = 'up';
+                } else if (normalized === 'down' && player.direction !== 'up') {
+                    player.nextDirection = 'down';
+                } else if (normalized === 'left' && player.direction !== 'right') {
+                    player.nextDirection = 'left';
+                } else if (normalized === 'right' && player.direction !== 'left') {
+                    player.nextDirection = 'right';
+                }
+            };
+
+            const handleKeyDown = (event) => {
+                if (!gameRunning) return;
+                const player = players['player1'];
+                if (!player || !player.isAlive) return;
+
+                const freezeEffect = player.effects.find(effect => effect.type === 'freeze');
+                if (freezeEffect) return;
+
+                const key = event.key.toLowerCase();
+                let desiredDirection = null;
+
+                if (key === 'arrowup' || key === 'w') {
+                    desiredDirection = 'up';
+                } else if (key === 'arrowdown' || key === 's') {
+                    desiredDirection = 'down';
+                } else if (key === 'arrowleft' || key === 'a') {
+                    desiredDirection = 'left';
+                } else if (key === 'arrowright' || key === 'd') {
+                    desiredDirection = 'right';
+                }
+
+                if (desiredDirection) {
+                    event.preventDefault();
+                    keyDirectionGuard(player, desiredDirection);
+                }
+            };
+
+            window.addEventListener('keydown', handleKeyDown, { passive: false });
+
             let touchStartX = 0;
             let touchStartY = 0;
             let touchHandled = false;
@@ -1244,17 +1350,17 @@
 
                     if (Math.abs(dx) > Math.abs(dy)) {
                         // Horizontal swipe
-                        if (dx > 0 && player.direction !== 'left') {
-                            player.nextDirection = 'right';
-                        } else if (dx < 0 && player.direction !== 'right') {
-                            player.nextDirection = 'left';
+                        if (dx > 0) {
+                            keyDirectionGuard(player, 'right');
+                        } else if (dx < 0) {
+                            keyDirectionGuard(player, 'left');
                         }
                     } else {
                         // Vertical swipe
-                        if (dy > 0 && player.direction !== 'up') {
-                            player.nextDirection = 'down';
-                        } else if (dy < 0 && player.direction !== 'down') {
-                            player.nextDirection = 'up';
+                        if (dy > 0) {
+                            keyDirectionGuard(player, 'down');
+                        } else if (dy < 0) {
+                            keyDirectionGuard(player, 'up');
                         }
                     }
                     touchHandled = true;
@@ -1348,7 +1454,7 @@
                     score: 0,
                     effects: [],
                     isAlive: true,
-                    speed: 8,
+                    speed: DEFAULT_SPEED,
                     isAI: true
                 };
                 
