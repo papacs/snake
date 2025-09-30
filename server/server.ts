@@ -449,6 +449,27 @@ function startGameLoop(roomId: string) {
         if (player.reviveCharges > 0) {
             player.reviveCharges -= 1;
             player.isAlive = true;
+            const nextPosition = nextPositions[player.id];
+            const minimalSnake = (() => {
+                if (nextPosition) {
+                    const trimmed = nextPosition.newSnake.slice(0, 2);
+                    if (trimmed.length === 1) {
+                        trimmed.push({ ...trimmed[0] });
+                    }
+                    nextPosition.newSnake = trimmed;
+                    nextPosition.head = trimmed[0];
+                    return trimmed;
+                }
+                if (player.snake.length >= 2) {
+                    return player.snake.slice(0, 2);
+                }
+                if (player.snake.length === 1) {
+                    return [player.snake[0], { ...player.snake[0] }];
+                }
+                const fallback = { x: 0, y: 0 };
+                return [fallback, { ...fallback }];
+            })();
+            player.snake = minimalSnake;
             player.effects.push({ type: 'invincible', duration: REVIVE_IMMUNITY_DURATION });
             player.effects.push({ type: 'ghost', duration: REVIVE_GHOST_DURATION });
             if (killer) {

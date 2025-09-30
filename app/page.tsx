@@ -23,17 +23,18 @@ const FOOD_TYPES = {
     MAGNET: { id: 10, color: '#ff00ff', score: 30, effect: 'magnet', duration: 8000, lifetime: 8000, name: "磁铁", description: "8 秒吸附周边食物，靠近即可收入囊中" }
 } as const;
 
+const MAGIC_CHIME = "https://actions.google.com/sounds/v1/cartoon/magic_chime.ogg";
 const FOOD_SOUNDS: Record<number, string> = {
   1: "https://actions.google.com/sounds/v1/cartoon/pop.ogg",
   2: "https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg",
   3: "https://actions.google.com/sounds/v1/cartoon/cowbell.ogg",
   4: "https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg",
-  5: "https://actions.google.com/sounds/v1/cartoon/magic_chime.ogg",
-  6: "https://actions.google.com/sounds/v1/cartoon/ascending_whistle.ogg",
-  7: "https://actions.google.com/sounds/v1/cartoon/fairy_dust_gliss.ogg",
-  8: "https://actions.google.com/sounds/v1/cartoon/air_swirl.ogg",
+  5: MAGIC_CHIME,
+  6: MAGIC_CHIME,
+  7: MAGIC_CHIME,
+  8: MAGIC_CHIME,
   9: "https://actions.google.com/sounds/v1/cartoon/siren_whistle.ogg",
-  10: "https://actions.google.com/sounds/v1/cartoon/suction_pop.ogg",
+  10: MAGIC_CHIME,
 };
 const EFFECT_SOUNDS: Record<string, string> = {
   freeze: "https://actions.google.com/sounds/v1/cartoon/metal_twang.ogg",
@@ -103,6 +104,8 @@ export default function SnakeGame() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [roomsSummary, setRoomsSummary] = useState<RoomSummary[]>([]);
   const [roomError, setRoomError] = useState("");
+  const [foodPanelOpen, setFoodPanelOpen] = useState(false);
+  const [playerListOpen, setPlayerListOpen] = useState(true);
 
   // Game state
   const [gridSize, setGridSize] = useState(17);
@@ -728,21 +731,47 @@ export default function SnakeGame() {
     return () => clearInterval(interval);
   }, [currentPlayer, gameStarted]);
 
-  const PlayerList = ({ players, currentPlayerId }: { players: Player[], currentPlayerId: string }) => (
-    <div className="players-panel">
-      <h2>玩家列表</h2>
-      <div id="players-list">
-        {players.map((player) => (
-          <div key={player.id} className={`player ${player.isAlive ? 'player-alive' : 'player-dead'}`}>
-            <div className="player-color" style={{ backgroundColor: player.color.replace('bg-', '').replace('-500', '') }}></div>
-            <span>{player.name}{player.id === currentPlayerId && ' (你)'}</span>
-            <span style={{ marginLeft: 'auto' }}>分数: {player.score}</span>
-            <span style={{ marginLeft: '12px' }}>复活甲: {player.reviveCharges ?? 0}</span>
-             {!player.isAlive && gameStarted && ' ☠️'}
-             {!gameStarted && (player.isReady ? ' ✅' : ' ❌')}
-          </div>
-        ))}
+  const PlayerList = ({
+    players,
+    currentPlayerId,
+    open,
+    onToggle
+  }: {
+    players: Player[];
+    currentPlayerId: string;
+    open: boolean;
+    onToggle: () => void;
+  }) => (
+    <div className={`players-panel${open ? ' players-panel-open' : ' players-panel-closed'}`}>
+      <div
+        className="panel-header"
+        onClick={onToggle}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onToggle();
+          }
+        }}
+        role="button"
+        tabIndex={0}
+      >
+        <h2>玩家列表</h2>
+        <span className="panel-toggle-indicator">{open ? '-' : '+'}</span>
       </div>
+      {open && (
+        <div id="players-list">
+          {players.map((player) => (
+            <div key={player.id} className={`player ${player.isAlive ? 'player-alive' : 'player-dead'}`}>
+              <div className="player-color" style={{ backgroundColor: player.color.replace('bg-', '').replace('-500', '') }}></div>
+              <span>{player.name}{player.id === currentPlayerId && ' (你)'}</span>
+              <span style={{ marginLeft: 'auto' }}>分数: {player.score}</span>
+              <span style={{ marginLeft: '12px' }}>复活甲: {player.reviveCharges ?? 0}</span>
+               {!player.isAlive && gameStarted && ' ☠️'}
+               {!gameStarted && (player.isReady ? ' ✅' : ' ❌')}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 
@@ -760,20 +789,38 @@ export default function SnakeGame() {
     </div>
   );
 
-  const FoodInfoPanel = () => (
-      <div className="foods-info">
-          <h2>食物类型</h2>
-          {Object.values(FOOD_TYPES).map(food => (
-              <div className="food-item" key={food.id}>
-                  <div className="food-icon" style={{ background: food.color, color: food.id === 9 ? 'black' : 'white' }}>
-                      {food.id === 10 ? 'X' : food.id}
-                  </div>
-                  <div className="food-text">
-                    <span>{food.name}</span>
-                    {food.description && <small>{food.description}</small>}
-                  </div>
-              </div>
-          ))}
+  const FoodInfoPanel = ({ open, onToggle }: { open: boolean; onToggle: () => void }) => (
+      <div className={`foods-info${open ? ' foods-info-open' : ' foods-info-closed'}`}>
+          <div
+            className="panel-header foods-info-header"
+            onClick={onToggle}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                onToggle();
+              }
+            }}
+            role="button"
+            tabIndex={0}
+          >
+            <h2>食物类型</h2>
+            <span className="panel-toggle-indicator">{open ? '-' : '+'}</span>
+          </div>
+          {open && (
+            <div className="foods-info-body">
+              {Object.values(FOOD_TYPES).map(food => (
+                <div className="food-item" key={food.id}>
+                    <div className="food-icon" style={{ background: food.color, color: food.id === 9 ? 'black' : 'white' }}>
+                        {food.id === 10 ? 'X' : food.id}
+                    </div>
+                    <div className="food-text">
+                      <span>{food.name}</span>
+                      {food.description && <small>{food.description}</small>}
+                    </div>
+                </div>
+              ))}
+            </div>
+          )}
       </div>
   );
 
@@ -901,13 +948,20 @@ export default function SnakeGame() {
         }}
       />
       <header>
-        <div className="w-full flex flex-wrap items-center justify-between gap-4">
+        <div className="header-bar">
           <h1>贪吃蛇大作战</h1>
-          {canNavigateBack && (
-            <button onClick={navigateBackToMenu}>
-              返回上一页
-            </button>
-          )}
+          <div className="header-actions">
+            {canNavigateBack && (
+              <button onClick={navigateBackToMenu}>
+                返回上一页
+              </button>
+            )}
+            {roomId && (
+              <button onClick={leaveRoom}>
+                退出房间
+              </button>
+            )}
+          </div>
         </div>
         {roomId && <div className="status">房间号: {roomId}</div>}
       </header>
@@ -976,7 +1030,8 @@ export default function SnakeGame() {
       ) : (
         // Multiplayer Room View
         <div className="game-area">
-            <div className="relative">
+            <div className="canvas-wrapper">
+              <div className="relative">
                 {gameOver && (
                     <div className="absolute inset-0 bg-black bg-opacity-50 flex flex-col items-center justify-center z-10">
                         <div className="text-white text-3xl font-bold">游戏结束!</div>
@@ -997,14 +1052,17 @@ export default function SnakeGame() {
                     height: 'auto'
                   }}
                 />
+              </div>
             </div>
             <div className="sidebar">
-                <button className="room-leave-button" onClick={leaveRoom}>
-                  退出房间
-                </button>
                 {gameStarted && <EffectsPanel effects={currentPlayer?.effects || []} />}
-                
-                <PlayerList players={players} currentPlayerId={playerId} />
+
+                <PlayerList
+                  players={players}
+                  currentPlayerId={playerId}
+                  open={playerListOpen}
+                  onToggle={() => setPlayerListOpen(prev => !prev)}
+                />
 
                 {!gameStarted && !gameOver && (
                     <div className="controls-stack flex flex-col items-center gap-4 mt-4">
@@ -1019,7 +1077,10 @@ export default function SnakeGame() {
                     </div>
                 )}
                 
-                <FoodInfoPanel />
+                <FoodInfoPanel
+                  open={foodPanelOpen}
+                  onToggle={() => setFoodPanelOpen(prev => !prev)}
+                />
             </div>
         </div>
       )}

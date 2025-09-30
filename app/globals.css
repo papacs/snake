@@ -32,7 +32,7 @@ body {
 .container {
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: stretch;
     gap: 20px;
     max-width: 1200px;
     width: min(100%, 1200px);
@@ -64,16 +64,21 @@ h1 {
     background-color: rgba(0, 0, 0, 0.7);
     box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
     display: grid; /* Ensure it works with React's grid layout */
-    max-width: min(100%, 640px);
+    max-width: min(100%, 720px);
     width: 100%;
     height: auto;
 }
+.canvas-wrapper {
+    flex: 1 1 520px;
+    display: flex;
+    justify-content: center;
+}
 .sidebar {
-    flex: 1 1 280px;
+    flex: 0 1 320px;
     display: flex;
     flex-direction: column;
     gap: 20px;
-    min-width: min(100%, 320px);
+    min-width: 260px;
 }
 .players-panel, .foods-info, .effects-panel {
     background: rgba(0, 0, 0, 0.7);
@@ -81,10 +86,60 @@ h1 {
     padding: 15px;
     border: 2px solid #fff;
 }
+.foods-info {
+    transition: max-height 0.3s ease;
+    overflow: hidden;
+}
+.foods-info-closed {
+    max-height: 58px;
+}
+.foods-info-open {
+    max-height: 520px;
+}
+.foods-info-header {
+    padding-bottom: 6px;
+}
+.foods-info-body {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
 .players-panel h2, .foods-info h2, .effects-panel h2 {
     color: #ffde59;
     margin-bottom: 15px;
     text-align: center;
+}
+.panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    user-select: none;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+.panel-header h2 {
+    margin: 0;
+    flex: 1;
+    text-align: left;
+}
+.panel-toggle-indicator {
+    color: #ffde59;
+    font-size: 20px;
+    width: 20px;
+    text-align: center;
+    line-height: 1;
+}
+.players-panel {
+    transition: max-height 0.3s ease;
+    overflow: hidden;
+}
+.players-panel-open {
+    max-height: 480px;
+}
+.players-panel-closed {
+    max-height: 58px;
 }
 .player {
     display: flex;
@@ -190,12 +245,51 @@ button:disabled {
     border-left: 4px solid #ff0000;
     opacity: 0.7;
 }
-.room-leave-button {
+.header-bar {
     width: 100%;
-    margin-bottom: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
 }
-.room-leave-button:disabled {
+.header-actions {
+    display: flex;
+    gap: 10px;
+}
+.header-actions button {
+    min-width: 120px;
+}
+.sidebar-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.panel-toggle {
+    width: 100%;
+}
+.panel-toggle:disabled {
     opacity: 0.6;
+}
+.foods-info {
+    transition: max-height 0.3s ease;
+    overflow: hidden;
+}
+.foods-info-closed {
+    max-height: 58px;
+}
+.foods-info-open {
+    max-height: 520px;
+}
+.foods-info-header {
+    display: flex;
+    justify-content: center;
+}
+.foods-info-body {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 .room-list {
     display: flex;
@@ -250,8 +344,12 @@ button:disabled {
         max-width: 100%;
         height: auto;
     }
+    .canvas-wrapper,
     .sidebar {
         width: 100%;
+    }
+    .sidebar {
+        min-width: auto;
     }
     .container {
         gap: 16px;
@@ -277,5 +375,16 @@ button:disabled {
     }
     .controls button {
         flex: 1 1 100%;
+    }
+    .header-actions {
+        width: 100%;
+        justify-content: center;
+        gap: 8px;
+    }
+    .panel-toggle {
+        width: 100%;
+    }
+    .room-list {
+        max-width: none;
     }
 }
