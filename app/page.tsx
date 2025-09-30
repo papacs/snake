@@ -172,7 +172,12 @@ export default function SnakeGame() {
     if (!audio) return;
     try {
       audio.currentTime = 0;
-      void audio.play();
+      const playback = audio.play();
+      if (playback && typeof playback.catch === 'function') {
+        playback.catch(err => {
+          console.warn("音效播放失败", err);
+        });
+      }
     } catch (err) {
       console.warn("音效播放失败", err);
     }
@@ -508,6 +513,10 @@ export default function SnakeGame() {
       const elapsed = now - food.spawnTime;
       const remaining = lifetime - elapsed;
       const percent = lifetime > 0 ? Math.max(0, Math.min(100, remaining / lifetime * 100)) : 0;
+
+      if (food.isCorpse && elapsed >= lifetime) {
+        return;
+      }
 
       if (food.isCorpse) {
         const flickerVisible = Math.floor(elapsed / 120) % 2 === 0;
@@ -1092,30 +1101,38 @@ export default function SnakeGame() {
                     height: 'auto'
                   }}
                 />
+                {!gameStarted && !gameOver && (
+                  <div className="canvas-controls">
+                    <button onClick={readyUp}>
+                      {players.find(p => p.id === playerId)?.isReady ? '取消准备' : '准备'}
+                    </button>
+                    {isOwner && (
+                      <button onClick={startGame} disabled={!players.every(p => p.isReady)}>
+                        开始游戏
+                      </button>
+                    )}
+                  </div>
+                )}
+                <div className="mobile-only">
+                  <PlayerList
+                    players={players}
+                    currentPlayerId={playerId}
+                    open={playerListOpen}
+                    onToggle={() => setPlayerListOpen(prev => !prev)}
+                  />
+                </div>
               </div>
             </div>
             <div className="sidebar">
                 {gameStarted && <EffectsPanel effects={currentPlayer?.effects || []} />}
-
-                {!gameStarted && !gameOver && (
-                    <div className="sidebar-controls">
-                        <button onClick={readyUp}>
-                          {players.find(p => p.id === playerId)?.isReady ? '取消准备' : '准备'}
-                        </button>
-                        {isOwner && (
-                          <button onClick={startGame} disabled={!players.every(p => p.isReady)}>
-                            开始游戏
-                          </button>
-                        )}
-                    </div>
-                )}
-
-                <PlayerList
-                  players={players}
-                  currentPlayerId={playerId}
-                  open={playerListOpen}
-                  onToggle={() => setPlayerListOpen(prev => !prev)}
-                />
+                <div className="desktop-only">
+                  <PlayerList
+                    players={players}
+                    currentPlayerId={playerId}
+                    open={playerListOpen}
+                    onToggle={() => setPlayerListOpen(prev => !prev)}
+                  />
+                </div>
 
                 <FoodInfoPanel
                   open={foodPanelOpen}

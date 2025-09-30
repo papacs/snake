@@ -277,14 +277,16 @@ function startGameLoop(roomId: string) {
         const playersAteViaMagnet = new Set<string>();
 
         // 1. Update food lifetime and remove expired food
-        const initialFoodCount = room.foods.length;
+        const expiredFoods: Food[] = [];
         room.foods = room.foods.filter(food => {
             const lifetime = food.customLifetime ?? food.type.lifetime;
-            return now - food.spawnTime < lifetime;
+            const expired = now - food.spawnTime >= lifetime;
+            if (expired) expiredFoods.push(food);
+            return !expired;
         });
-        const expiredCount = initialFoodCount - room.foods.length;
-        if (expiredCount > 0) {
-            for (let i = 0; i < expiredCount; i++) {
+        const expiredRegularCount = expiredFoods.filter(food => !food.isCorpse).length;
+        if (expiredRegularCount > 0) {
+            for (let i = 0; i < expiredRegularCount; i++) {
                 const allSnakes = players.map(p => p.snake);
                 room.foods.push(generateFood(room.foods, allSnakes, room.gridSize));
             }
@@ -496,6 +498,7 @@ function startGameLoop(roomId: string) {
                 corpseColor: player.color
             }));
             room.foods.push(...bodyFood);
+            player.snake = [];
 
             if (killer) {
                 killer.reviveCharges += 1;

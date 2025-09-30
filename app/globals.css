@@ -54,11 +54,17 @@ h1 {
 .game-area {
     display: flex;
     flex-wrap: wrap;
-    gap: clamp(16px, 3vw, 30px);
+    gap: clamp(12px, 2vw, 24px);
     width: min(100%, 1200px);
     justify-content: center;
     align-items: flex-start;
     margin: 0 auto;
+}
+.mobile-only {
+    display: none;
+}
+.desktop-only {
+    display: block;
 }
 #game-board {
     border: 3px solid #fff;
@@ -82,16 +88,17 @@ h1 {
     width: min(100%, 320px);
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 10px;
     min-width: 260px;
 }
-.sidebar-controls {
+.canvas-controls {
     display: flex;
     gap: 12px;
     justify-content: center;
-    margin-top: 8px;
+    margin-top: 6px;
+    margin-bottom: 0;
 }
-.sidebar-controls button {
+.canvas-controls button {
     flex: 1 1 0;
     min-width: 120px;
     white-space: nowrap;
@@ -346,7 +353,7 @@ button:disabled {
     .game-area {
         flex-direction: column;
         align-items: center;
-        gap: 20px;
+        gap: 4px;
     }
     #game-board {
         max-width: 100%;
@@ -360,13 +367,13 @@ button:disabled {
         flex: 1 1 auto;
         width: 100%;
         min-width: auto;
-        gap: 12px;
+        gap: 4px;
     }
-    .sidebar-controls {
-        margin: 8px 0 4px;
+    .canvas-controls {
+        margin: 6px 0 0;
         width: 100%;
     }
-    .sidebar-controls button {
+    .canvas-controls button {
         flex: 1 1 50%;
         max-width: none;
     }
@@ -379,6 +386,13 @@ button:disabled {
     }
     .controls button {
         flex: 1 1 45%;
+    }
+    .mobile-only {
+        display: block;
+        width: 100%;
+    }
+    .desktop-only {
+        display: none;
     }
 }
 
