@@ -17,13 +17,30 @@ const FOOD_TYPES = {
     SHRINK: { id: 4, color: '#aa00ff', score: 20, effect: 'shrink', value: 3, lifetime: 8000, name: "缩小蘑菇" },
     RAINBOW: { id: 5, color: 'rainbow', score: 50, effect: 'random', lifetime: 7000, name: "彩虹糖果" },
     TELEPORT: { id: 6, color: 'linear-gradient(45deg, #00ffaa, #00aaff)', score: 20, effect: 'teleport', lifetime: 7000, name: "传送门" },
+    REVIVE: { id: 7, color: '#ffd700', score: 60, effect: 'revive', lifetime: 12000, name: "复活甲" },
     GHOST: { id: 8, color: '#00ff00', score: 40, effect: 'ghost', duration: 6000, lifetime: 8000, name: "穿墙能力" },
     INVINCIBLE: { id: 9, color: '#ffffff', score: 50, effect: 'invincible', duration: 5000, lifetime: 8000, name: "无敌状态" },
     MAGNET: { id: 10, color: '#ff00ff', score: 30, effect: 'magnet', duration: 8000, lifetime: 8000, name: "磁铁" }
 } as const;
 
+const FOOD_SOUNDS: Record<number, string> = {
+  1: "https://actions.google.com/sounds/v1/cartoon/pop.ogg",
+  2: "https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg",
+  3: "https://actions.google.com/sounds/v1/cartoon/cowbell.ogg",
+  4: "https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg",
+  5: "https://actions.google.com/sounds/v1/cartoon/magic_chime.ogg",
+  6: "https://actions.google.com/sounds/v1/cartoon/ascending_whistle.ogg",
+  7: "https://actions.google.com/sounds/v1/cartoon/fairy_dust_gliss.ogg",
+  8: "https://actions.google.com/sounds/v1/cartoon/air_swirl.ogg",
+  9: "https://actions.google.com/sounds/v1/cartoon/siren_whistle.ogg",
+  10: "https://actions.google.com/sounds/v1/cartoon/suction_pop.ogg",
+};
+
+const WIN_SOUND_SRC = "https://actions.google.com/sounds/v1/cartoon/ta_da.ogg";
+const LOSE_SOUND_SRC = "https://actions.google.com/sounds/v1/cartoon/sad_trombone.ogg";
+
 type Effect = {
-    type: 'freeze' | 'speed' | 'ghost' | 'invincible' | 'magnet' | 'shrink' | 'grow' | 'teleport';
+    type: 'freeze' | 'speed' | 'ghost' | 'invincible' | 'magnet' | 'shrink' | 'grow' | 'teleport' | 'revive';
     duration: number;
     [key: string]: unknown; 
 };
@@ -37,6 +54,7 @@ const EFFECT_LABELS: Record<Effect['type'], string> = {
     shrink: "缩小",
     grow: "变长",
     teleport: "传送",
+    revive: "复活甲",
 };
 
 type Food = Position & {
@@ -54,6 +72,7 @@ type Player = {
   isAlive: boolean;
   score: number;
   effects: Effect[];
+  reviveCharges: number;
 };
 
 export default function SnakeGame() {
@@ -74,10 +93,6 @@ export default function SnakeGame() {
   const [foods, setFoods] = useState<Food[]>([]);
   const [gameOver, setGameOver] = useState(false);
   const [winner, setWinner] = useState<Player | null>(null);
-  
-  // Sound effect ref
-  const eatSoundRef = useRef<HTMLAudioElement>(null);
-  const prevScores = useRef<Map<string, number>>(new Map());
   
   // Canvas ref
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -112,6 +127,48 @@ export default function SnakeGame() {
   const canvasPixelSize = gridSize * cellSize + 40;
   const canvasMaxWidth = Math.min(canvasPixelSize, 720);
 
+  const foodAudioRefs = useRef<Record<number, HTMLAudioElement>>({});
+  const winSoundRef = useRef<HTMLAudioElement>(null);
+  const loseSoundRef = useRef<HTMLAudioElement>(null);
+  const playerIdRef = useRef<string>("");
+
+  useEffect(() => {
+    playerIdRef.current = playerId;
+  }, [playerId]);
+
+  const playAudio = useCallback((audio?: HTMLAudioElement | null) => {
+    if (!audio) return;
+    try {
+      audio.currentTime = 0;
+      void audio.play();
+    } catch (err) {
+      console.warn("音效播放失败", err);
+    }
+  }, []);
+
+  const playFoodSound = useCallback((foodTypeId: number) => {
+    const audio = foodAudioRefs.current[foodTypeId];
+    if (audio) {
+      playAudio(audio);
+      return;
+    }
+
+    const fallbackSrc = FOOD_SOUNDS[foodTypeId];
+    if (fallbackSrc) {
+      const fallback = new Audio(fallbackSrc);
+      fallback.preload = "auto";
+      playAudio(fallback);
+    }
+  }, [playAudio]);
+
+  const playGameOverSound = useCallback((didWin: boolean) => {
+    if (didWin) {
+      playAudio(winSoundRef.current);
+    } else {
+      playAudio(loseSoundRef.current);
+    }
+  }, [playAudio]);
+
   const socketInitializer = useCallback(() => {
     // --- DEBUG LINE ---
     console.log("Attempting to connect to socket server at:", process.env.NEXT_PUBLIC_SOCKET_URL);
@@ -120,6 +177,11 @@ export default function SnakeGame() {
     socket = io(socketUrl);
 
     socket.on("connect", () => console.log(`已连接到服务器: ${socketUrl}`));
+    const handleFoodConsumed = ({ playerId: eaterId, foodTypeId }: { playerId: string; foodTypeId: number }) => {
+      if (playerIdRef.current && eaterId === playerIdRef.current) {
+        playFoodSound(foodTypeId);
+      }
+    };
     socket.on('roomCreated', ({ roomId, playerId, isOwner }) => {
       setRoomId(roomId);
       setPlayerId(playerId);
@@ -145,6 +207,10 @@ export default function SnakeGame() {
       if (gridSize) setGridSize(gridSize);
     });
     socket.on('gameOver', (winner) => {
+      if (playerIdRef.current) {
+        const didWin = Boolean(winner && winner.id === playerIdRef.current);
+        playGameOverSound(didWin);
+      }
       setGameStarted(false);
       setGameOver(true);
       setWinner(winner);
@@ -155,33 +221,21 @@ export default function SnakeGame() {
       setWinner(null);
     });
     socket.on('error', (message) => alert(message));
-  }, []);
+    socket.on('foodConsumed', handleFoodConsumed);
+  }, [playFoodSound, playGameOverSound]);
 
   useEffect(() => {
     if (multiplayerMode && playerName) {
       socketInitializer();
     }
     return () => {
-      socket?.disconnect();
-      socket = null;
+      if (socket) {
+        socket.removeAllListeners();
+        socket.disconnect();
+        socket = null;
+      }
     };
   }, [multiplayerMode, playerName, socketInitializer]);
-
-  // Sound effect trigger
-  useEffect(() => {
-    if (!gameStarted) {
-        prevScores.current.clear();
-        return;
-    };
-    
-    players.forEach(player => {
-        const oldScore = prevScores.current.get(player.id) ?? 0;
-        if (player.score > oldScore) {
-            eatSoundRef.current?.play().catch(err => console.error("音效播放失败:", err));
-        }
-        prevScores.current.set(player.id, player.score);
-    });
-  }, [players, gameStarted]);
   
   const resetGame = useCallback(() => {
     if (multiplayerMode && isOwner) {
@@ -191,6 +245,7 @@ export default function SnakeGame() {
 
   const navigateBackToMenu = useCallback(() => {
     if (socket) {
+      socket.removeAllListeners();
       socket.disconnect();
       socket = null;
     }
@@ -535,6 +590,7 @@ export default function SnakeGame() {
             <div className="player-color" style={{ backgroundColor: player.color.replace('bg-', '').replace('-500', '') }}></div>
             <span>{player.name}{player.id === currentPlayerId && ' (你)'}</span>
             <span style={{ marginLeft: 'auto' }}>分数: {player.score}</span>
+            <span style={{ marginLeft: '12px' }}>复活甲: {player.reviveCharges ?? 0}</span>
              {!player.isAlive && gameStarted && ' ☠️'}
              {!gameStarted && (player.isReady ? ' ✅' : ' ❌')}
           </div>
@@ -649,7 +705,23 @@ export default function SnakeGame() {
 
   return (
     <div className="container">
-      <audio ref={eatSoundRef} src="https://actions.google.com/sounds/v1/cartoon/pop.ogg" preload="auto"></audio>
+      {Object.entries(FOOD_SOUNDS).map(([id, src]) => (
+        <audio
+          key={id}
+          ref={(element) => {
+            const numericId = Number(id);
+            if (element) {
+              foodAudioRefs.current[numericId] = element;
+            } else {
+              delete foodAudioRefs.current[numericId];
+            }
+          }}
+          src={src}
+          preload="auto"
+        ></audio>
+      ))}
+      <audio ref={winSoundRef} src={WIN_SOUND_SRC} preload="auto"></audio>
+      <audio ref={loseSoundRef} src={LOSE_SOUND_SRC} preload="auto"></audio>
       <div 
         ref={touchOverlayRef}
         style={{

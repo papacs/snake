@@ -368,6 +368,10 @@
                         <span>传送门 - 传送到随机位置</span>
                     </div>
                     <div class="food-item">
+                        <div class="food-icon" style="background-color: #ffd700;">7</div>
+                        <span>复活甲 - 紧急复活并获得短暂无敌</span>
+                    </div>
+                    <div class="food-item">
                         <div class="food-icon" style="background-color: #00ff00;">8</div>
                         <span>穿墙能力 - 可以穿过墙壁</span>
                     </div>
@@ -430,6 +434,93 @@
             const playersList = document.getElementById('players-list');
             const currentEffects = document.getElementById('current-effects');
             const touchOverlay = document.getElementById('touch-overlay');
+            const REVIVE_INVINCIBLE_DURATION = 3000;
+            const FOOD_TYPES = {
+                NORMAL: { id: 1, color: '#ff0000', score: 1, length: 1, lifetime: 10000, name: "普通食物" },
+                FREEZE: { id: 2, color: '#00aaff', score: 2, effect: 'freeze', duration: 3000, lifetime: 8000, name: "冰冻果实" },
+                SPEED: { id: 3, color: '#ff5500', score: 3, effect: 'speed', duration: 5000, speedMultiplier: 2, lifetime: 8000, name: "加速辣椒" },
+                SHRINK: { id: 4, color: '#aa00ff', score: 2, effect: 'shrink', value: 3, lifetime: 8000, name: "缩小蘑菇" },
+                RAINBOW: { id: 5, color: 'rainbow', score: 5, effect: 'random', lifetime: 7000, name: "彩虹糖果" },
+                TELEPORT: { id: 6, color: 'linear-gradient(45deg, #00ffaa, #00aaff)', score: 2, effect: 'teleport', lifetime: 7000, name: "传送门" },
+                REVIVE: { id: 7, color: '#ffd700', score: 4, effect: 'revive', lifetime: 12000, name: "复活甲" },
+                GHOST: { id: 8, color: '#00ff00', score: 4, effect: 'ghost', duration: 6000, lifetime: 8000, name: "穿墙能力" },
+                INVINCIBLE: { id: 9, color: '#ffffff', score: 5, effect: 'invincible', duration: 5000, lifetime: 8000, name: "无敌状态" },
+                MAGNET: { id: 10, color: '#ff00ff', score: 3, effect: 'magnet', duration: 8000, lifetime: 8000, name: "磁铁" }
+            };
+
+            const FOOD_SOUNDS = {
+                1: "https://actions.google.com/sounds/v1/cartoon/pop.ogg",
+                2: "https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg",
+                3: "https://actions.google.com/sounds/v1/cartoon/cowbell.ogg",
+                4: "https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg",
+                5: "https://actions.google.com/sounds/v1/cartoon/magic_chime.ogg",
+                6: "https://actions.google.com/sounds/v1/cartoon/ascending_whistle.ogg",
+                7: "https://actions.google.com/sounds/v1/cartoon/fairy_dust_gliss.ogg",
+                8: "https://actions.google.com/sounds/v1/cartoon/air_swirl.ogg",
+                9: "https://actions.google.com/sounds/v1/cartoon/siren_whistle.ogg",
+                10: "https://actions.google.com/sounds/v1/cartoon/suction_pop.ogg"
+            };
+
+            const WIN_SOUND_SRC = "https://actions.google.com/sounds/v1/cartoon/ta_da.ogg";
+            const LOSE_SOUND_SRC = "https://actions.google.com/sounds/v1/cartoon/sad_trombone.ogg";
+
+            const loadAudio = (src) => {
+                const audio = new Audio(src);
+                audio.preload = 'auto';
+                return audio;
+            };
+
+            const foodSoundMap = {};
+            Object.entries(FOOD_SOUNDS).forEach(([id, src]) => {
+                foodSoundMap[Number(id)] = loadAudio(src);
+            });
+            const winSound = loadAudio(WIN_SOUND_SRC);
+            const loseSound = loadAudio(LOSE_SOUND_SRC);
+
+            const playFoodSound = (foodTypeId) => {
+                const audio = foodSoundMap[foodTypeId];
+                if (!audio) return;
+                try {
+                    audio.currentTime = 0;
+                    audio.play();
+                } catch (error) {
+                    console.warn('音效播放失败', error);
+                }
+            };
+
+            const playGameOverSound = (didWin) => {
+                const audio = didWin ? winSound : loseSound;
+                try {
+                    audio.currentTime = 0;
+                    audio.play();
+                } catch (error) {
+                    console.warn('结算音效播放失败', error);
+                }
+            };
+            function triggerRevive(player, message, killer) {
+                if (!player.reviveCharges || player.reviveCharges <= 0) {
+                    return false;
+                }
+                player.reviveCharges -= 1;
+                player.isAlive = true;
+                player.effects = player.effects.filter(effect => effect.type !== 'freeze');
+                player.effects.push({
+                    type: 'invincible',
+                    duration: REVIVE_INVINCIBLE_DURATION,
+                    message: '复活甲：3秒无敌'
+                });
+                player.effects.push({
+                    type: 'ghost',
+                    duration: REVIVE_INVINCIBLE_DURATION,
+                    message: '复活甲：3秒穿墙'
+                });
+                if (killer) {
+                    killer.reviveCharges = (killer.reviveCharges || 0) + 1;
+                }
+                statusDiv.textContent = `${player.name} ${message}，复活甲触发！`;
+                updatePlayersList();
+                return true;
+            }
             const backBtn = document.getElementById('back-btn');
 
             backBtn.addEventListener('click', () => {
@@ -442,19 +533,6 @@
             const gameHeight = canvas.height;
             const gridWidth = gameWidth / gridSize;
             const gridHeight = gameHeight / gridSize;
-            
-            // 食物类型（已移除REVERSE类型）
-            const FOOD_TYPES = {
-                NORMAL: { id: 1, color: '#ff0000', score: 1, length: 1, lifetime: 10000, name: "普通食物" },
-                FREEZE: { id: 2, color: '#00aaff', score: 2, effect: 'freeze', duration: 3000, lifetime: 8000, name: "冰冻果实" },
-                SPEED: { id: 3, color: '#ff5500', score: 3, effect: 'speed', duration: 5000, speedMultiplier: 2, lifetime: 8000, name: "加速辣椒" },
-                SHRINK: { id: 4, color: '#aa00ff', score: 2, effect: 'shrink', value: 3, lifetime: 8000, name: "缩小蘑菇" },
-                RAINBOW: { id: 5, color: 'rainbow', score: 5, effect: 'random', lifetime: 7000, name: "彩虹糖果" },
-                TELEPORT: { id: 6, color: 'linear-gradient(45deg, #00ffaa, #00aaff)', score: 2, effect: 'teleport', lifetime: 7000, name: "传送门" },
-                GHOST: { id: 8, color: '#00ff00', score: 4, effect: 'ghost', duration: 6000, lifetime: 8000, name: "穿墙能力" },
-                INVINCIBLE: { id: 9, color: '#ffffff', score: 5, effect: 'invincible', duration: 5000, lifetime: 8000, name: "无敌状态" },
-                MAGNET: { id: 10, color: '#ff00ff', score: 3, effect: 'magnet', duration: 8000, lifetime: 8000, name: "磁铁" }
-            };
             
             // 玩家数据 - 默认只有玩家1
             const DEFAULT_SPEED = 6;
@@ -472,6 +550,8 @@
                     effects: [],
                     isAlive: true,
                     speed: DEFAULT_SPEED, // 初始速度 (帧/秒)
+                    reviveCharges: 0,
+                    pendingMagnet: 0,
                     isAI: false
                 }
             };
@@ -510,7 +590,9 @@
                     player.effects = [];
                     player.isAlive = true;
                     player.speed = DEFAULT_SPEED;
-                    
+                    player.reviveCharges = 0;
+                    player.pendingMagnet = 0;
+
                     i++;
                 }
                 
@@ -636,6 +718,11 @@
                         if (!ghostEffect) {
                             // 检查边界碰撞
                             if (head.x < 0 || head.x >= gridWidth || head.y < 0 || head.y >= gridHeight) {
+                                if (triggerRevive(player, '撞墙了', null)) {
+                                    head.x = Math.max(0, Math.min(head.x, gridWidth - 1));
+                                    head.y = Math.max(0, Math.min(head.y, gridHeight - 1));
+                                    continue;
+                                }
                                 player.isAlive = false;
                                 statusDiv.textContent = `${player.name} 撞墙了！`;
                                 continue;
@@ -653,13 +740,15 @@
                         if (!invincibleEffect) {
                             for (let i = 1; i < player.snake.length; i++) {
                                 if (player.snake[i].x === head.x && player.snake[i].y === head.y) {
-                                    player.isAlive = false;
-                                    statusDiv.textContent = `${player.name} 撞到了自己！`;
+                                    if (!triggerRevive(player, '撞到了自己', null)) {
+                                        player.isAlive = false;
+                                        statusDiv.textContent = `${player.name} 撞到了自己！`;
+                                    }
                                     break;
                                 }
                             }
                         }
-                        
+
                         // 检查其他玩家碰撞
                         if (!invincibleEffect) {
                             for (let otherPlayerId in players) {
@@ -669,19 +758,28 @@
                                 
                                 for (let i = 0; i < otherPlayer.snake.length; i++) {
                                     if (otherPlayer.snake[i].x === head.x && otherPlayer.snake[i].y === head.y) {
-                                        player.isAlive = false;
-                                        statusDiv.textContent = `${player.name} 撞到了 ${otherPlayer.name}！`;
+                                        const killer = otherPlayer;
+                                        if (!triggerRevive(player, `撞到了 ${otherPlayer.name}`, killer)) {
+                                            player.isAlive = false;
+                                            statusDiv.textContent = `${player.name} 撞到了 ${otherPlayer.name}！`;
+                                            killer.reviveCharges = (killer.reviveCharges || 0) + 1;
+                                            updatePlayersList();
+                                        }
                                         break;
                                     }
                                 }
                                 if (!player.isAlive) break;
                             }
                         }
-                        
+
                         if (!player.isAlive) continue;
-                        
+
                         // 检查食物碰撞
                         let ateFood = false;
+                        if (player.pendingMagnet && player.pendingMagnet > 0) {
+                            player.pendingMagnet -= 1;
+                            ateFood = true;
+                        }
                         for (let i = 0; i < foods.length; i++) {
                             if (foods[i].x === head.x && foods[i].y === head.y) {
                                 // 吃到食物
@@ -701,13 +799,13 @@
                                 break;
                             }
                         }
-                        
+
                         // 磁铁效果 - 吸引附近食物
                         const magnetEffect = player.effects.find(effect => effect.type === 'magnet');
                         if (magnetEffect) {
                             attractFoods(player);
                         }
-                        
+
                         // 移动蛇
                         player.snake.unshift(head);
                         if (!ateFood) {
@@ -766,20 +864,33 @@
             function attractFoods(player) {
                 const head = player.snake[0];
                 const magnetRadius = 5; // 吸引半径
-                
-                for (let food of foods) {
-                    const dx = food.x - head.x;
-                    const dy = food.y - head.y;
+
+                for (let i = foods.length - 1; i >= 0; i--) {
+                    const food = foods[i];
+                    const dx = head.x - food.x;
+                    const dy = head.y - food.y;
                     const distance = Math.sqrt(dx * dx + dy * dy);
-                    
-                    if (distance < magnetRadius && distance > 0.5) {
-                        // 移动食物向蛇头
-                        food.x -= Math.sign(dx) * 0.5;
-                        food.y -= Math.sign(dy) * 0.5;
-                        
-                        // 确保食物不会穿过蛇头
-                        if (Math.abs(food.x - head.x) < 0.5) food.x = head.x;
-                        if (Math.abs(food.y - head.y) < 0.5) food.y = head.y;
+
+                    if (distance >= magnetRadius) continue;
+
+                    if (distance > 0.1) {
+                        const step = Math.min(0.5, distance);
+                        const normX = dx / (distance || 1);
+                        const normY = dy / (distance || 1);
+                        food.x += normX * step;
+                        food.y += normY * step;
+                    }
+
+                    const remainingDx = head.x - food.x;
+                    const remainingDy = head.y - food.y;
+                    const remainingDistance = Math.sqrt(remainingDx * remainingDx + remainingDy * remainingDy);
+
+                    if (remainingDistance <= 0.4) {
+                        foods.splice(i, 1);
+                        player.score += food.type.score;
+                        applyFoodEffect(player, food.type);
+                        player.pendingMagnet = (player.pendingMagnet || 0) + 1;
+                        generateFood(1);
                     }
                 }
             }
@@ -869,6 +980,7 @@
             
             // 应用食物效果
             function applyFoodEffect(player, foodType) {
+                playFoodSound(foodType.id);
                 switch (foodType.effect) {
                     case 'freeze':
                         player.effects.push({
@@ -992,6 +1104,14 @@
                             type: 'magnet',
                             duration: foodType.duration,
                             message: `获得磁铁能力 ${foodType.duration/1000} 秒`
+                        });
+                        break;
+                    case 'revive':
+                        player.reviveCharges = (player.reviveCharges || 0) + 1;
+                        player.effects.push({
+                            type: 'revive',
+                            duration: 2000,
+                            message: `获得复活甲 x${player.reviveCharges}`
                         });
                         break;
                     default:
@@ -1251,6 +1371,7 @@
                         <div class="player-color" style="background-color: ${player.color};"></div>
                         <span>${player.name} ${playerId === 'player1' ? '(你)' : ''}${player.isAI ? ' (AI)' : ''}</span>
                         <span style="margin-left: auto;">分数: ${player.score}</span>
+                        <span style="margin-left: 12px;">复活甲: ${player.reviveCharges || 0}</span>
                     `;
                     playersList.appendChild(playerEl);
                 }
@@ -1274,6 +1395,14 @@
                     startBtn.textContent = "重新开始";
                     document.body.style.overflow = ''; // Restore scrolling
                     touchOverlay.style.display = 'none';
+                    playGameOverSound(false);
+                } else if (alivePlayers === 1 && lastAlivePlayer && lastAlivePlayer.id === 'player1') {
+                    gameRunning = false;
+                    statusDiv.textContent = "恭喜通关！";
+                    startBtn.textContent = "重新开始";
+                    document.body.style.overflow = '';
+                    touchOverlay.style.display = 'none';
+                    playGameOverSound(true);
                 }
             }
             
@@ -1455,6 +1584,8 @@
                     effects: [],
                     isAlive: true,
                     speed: DEFAULT_SPEED,
+                    reviveCharges: 0,
+                    pendingMagnet: 0,
                     isAI: true
                 };
                 
