@@ -118,6 +118,16 @@ h1 {
     border: 2px solid white;
     flex-shrink: 0;
 }
+.food-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.food-text small {
+    font-size: 0.75rem;
+    color: rgba(255, 222, 89, 0.9);
+    line-height: 1.2;
+}
 .controls {
     display: flex;
     flex-wrap: wrap;

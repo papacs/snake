@@ -26,16 +26,16 @@ const io = new Server(httpServer, {
 
 // 食物类型定义
 const FOOD_TYPES = {
-    NORMAL: { id: 1, color: '#ff0000', score: 10, length: 1, lifetime: 15000, name: "普通食物" },
-    FREEZE: { id: 2, color: '#00aaff', score: 20, effect: 'freeze', duration: 3000, lifetime: 8000, name: "冰冻果实" },
-    SPEED: { id: 3, color: '#ff5500', score: 30, effect: 'speed', duration: 5000, speedMultiplier: 2, lifetime: 8000, name: "加速辣椒" },
-    SHRINK: { id: 4, color: '#aa00ff', score: 20, effect: 'shrink', value: 3, lifetime: 8000, name: "缩小蘑菇" },
-    RAINBOW: { id: 5, color: 'rainbow', score: 50, effect: 'random', lifetime: 7000, name: "彩虹糖果" },
-    TELEPORT: { id: 6, color: 'linear-gradient(45deg, #00ffaa, #00aaff)', score: 20, effect: 'teleport', lifetime: 7000, name: "传送门" },
-    REVIVE: { id: 7, color: '#ffd700', score: 60, effect: 'revive', lifetime: 12000, name: "复活甲" },
-    GHOST: { id: 8, color: '#00ff00', score: 40, effect: 'ghost', duration: 6000, lifetime: 8000, name: "穿墙能力" },
-    INVINCIBLE: { id: 9, color: '#ffffff', score: 50, effect: 'invincible', duration: 5000, lifetime: 8000, name: "无敌状态" },
-    MAGNET: { id: 10, color: '#ff00ff', score: 30, effect: 'magnet', duration: 8000, lifetime: 8000, name: "磁铁" }
+    NORMAL: { id: 1, color: '#ff0000', score: 10, length: 1, lifetime: 15000, name: "普通食物", description: "增加体型并获得基础积分" },
+    FREEZE: { id: 2, color: '#00aaff', score: 20, effect: 'freeze', duration: 3000, lifetime: 8000, name: "冰冻果实", description: "束缚目标 3 秒，需提早规划" },
+    SPEED: { id: 3, color: '#ff5500', score: 30, effect: 'speed', duration: 5000, speedMultiplier: 2, lifetime: 8000, name: "加速辣椒", description: "5 秒超速疾行，冲刺或逃生利器" },
+    SHRINK: { id: 4, color: '#aa00ff', score: 20, effect: 'shrink', value: 3, lifetime: 8000, name: "缩小蘑菇", description: "立刻瘦身 3 节，穿缝躲避更灵活" },
+    RAINBOW: { id: 5, color: 'rainbow', score: 50, effect: 'random', lifetime: 7000, name: "彩虹糖果", description: "随机触发惊喜或惊吓，挑战手气" },
+    TELEPORT: { id: 6, color: 'linear-gradient(45deg, #00ffaa, #00aaff)', score: 20, effect: 'teleport', lifetime: 7000, name: "传送门", description: "瞬移至安全随机点，摆脱险境" },
+    REVIVE: { id: 7, color: '#ffd700', score: 60, effect: 'revive', lifetime: 12000, name: "复活甲", description: "死亡后原地复活并获得短暂无敌" },
+    GHOST: { id: 8, color: '#00ff00', score: 40, effect: 'ghost', duration: 6000, lifetime: 8000, name: "穿墙能力", description: "6 秒穿墙无阻，穿梭追击无惧障碍" },
+    INVINCIBLE: { id: 9, color: '#ffffff', score: 50, effect: 'invincible', duration: 5000, lifetime: 8000, name: "无敌状态", description: "5 秒碰撞免疫，尽情冲撞得分" },
+    MAGNET: { id: 10, color: '#ff00ff', score: 30, effect: 'magnet', duration: 8000, lifetime: 8000, name: "磁铁", description: "8 秒吸附周围食物，靠近即可收入囊中" }
 } as const;
 
 type Position = {
@@ -169,8 +169,18 @@ function getColorIndexFromColor(color: string): number {
   return colors.indexOf(color);
 }
 
-function applyFoodEffect(player: Player, foodType: typeof FOOD_TYPES[keyof typeof FOOD_TYPES], room: Room, emitEvent = true) {
-    player.score += foodType.score;
+function applyFoodEffect(
+    player: Player,
+    foodType: typeof FOOD_TYPES[keyof typeof FOOD_TYPES],
+    room: Room,
+    options?: { emitEvent?: boolean; awardScore?: boolean }
+): string[] {
+    const { emitEvent = true, awardScore = true } = options ?? {};
+    const triggeredEffects: string[] = [];
+
+    if (awardScore) {
+        player.score += foodType.score;
+    }
 
     if (emitEvent) {
         io.to(room.id).emit('foodConsumed', { playerId: player.id, foodTypeId: foodType.id });
@@ -179,48 +189,62 @@ function applyFoodEffect(player: Player, foodType: typeof FOOD_TYPES[keyof typeo
     // Type guard to ensure we are dealing with a special food
     if (!('effect' in foodType)) { // This handles NORMAL food
         player.snake.push({ ...player.snake[player.snake.length - 1] });
-        return;
+        return triggeredEffects;
     }
 
-    // From here, TypeScript knows foodType has the 'effect' property and is not NORMAL
     switch (foodType.effect) {
         case 'freeze':
             player.effects.push({ type: 'freeze', duration: foodType.duration });
+            triggeredEffects.push('freeze');
             break;
         case 'speed':
             player.speed = foodType.speedMultiplier;
             player.effects.push({ type: 'speed', duration: foodType.duration, speedMultiplier: foodType.speedMultiplier });
+            triggeredEffects.push('speed');
             break;
         case 'shrink':
             const shrinkAmount = Math.min(foodType.value, player.snake.length - 2);
             if (shrinkAmount > 0) {
                 player.snake.splice(-shrinkAmount);
             }
+            triggeredEffects.push('shrink');
             break;
         case 'teleport':
             const newPos = generateRandomPosition(room.gridSize, room.players.size > 1 ? Array.from(room.players.values()).flatMap(p => p.snake) : player.snake, 3);
             player.snake = [newPos, {x: newPos.x - 1, y: newPos.y}];
+            triggeredEffects.push('teleport');
             break;
         case 'ghost':
             player.effects.push({ type: 'ghost', duration: foodType.duration });
+            triggeredEffects.push('ghost');
             break;
         case 'invincible':
             player.effects.push({ type: 'invincible', duration: foodType.duration });
+            triggeredEffects.push('invincible');
             break;
         case 'magnet':
             player.effects.push({ type: 'magnet', duration: foodType.duration });
+            triggeredEffects.push('magnet');
             break;
         case 'revive':
             player.reviveCharges += 1;
+            triggeredEffects.push('revive');
             break;
         case 'random':
             const randomEffects = Object.values(FOOD_TYPES).filter(f => 'effect' in f && f.effect !== 'random');
             const randomFood = randomEffects[Math.floor(Math.random() * randomEffects.length)];
             if (randomFood) {
-                 applyFoodEffect(player, randomFood, room, false); // Recursively apply a random effect without double-emitting
+                const nested = applyFoodEffect(player, randomFood, room, { emitEvent: false, awardScore: false });
+                triggeredEffects.push(...nested);
             }
             break;
     }
+
+    if (emitEvent && triggeredEffects.length > 0) {
+        io.to(room.id).emit('effectTriggered', { playerId: player.id, effects: triggeredEffects });
+    }
+
+    return triggeredEffects;
 }
 
 
@@ -404,18 +428,21 @@ function startGameLoop(roomId: string) {
             const player = room.players.get(playerId);
             if (!player) return;
 
-            const killer = killerId ? room.players.get(killerId) : undefined;
+        const killer = killerId ? room.players.get(killerId) : undefined;
 
-            if (player.reviveCharges > 0) {
-                player.reviveCharges -= 1;
-                player.isAlive = true;
-                player.effects.push({ type: 'invincible', duration: REVIVE_IMMUNITY_DURATION });
-                player.effects.push({ type: 'ghost', duration: REVIVE_GHOST_DURATION });
-                if (killer) {
-                    killer.reviveCharges += 1;
-                }
-                return;
+        io.to(roomId).emit('playerDied', { playerId, killerId });
+
+        if (player.reviveCharges > 0) {
+            player.reviveCharges -= 1;
+            player.isAlive = true;
+            player.effects.push({ type: 'invincible', duration: REVIVE_IMMUNITY_DURATION });
+            player.effects.push({ type: 'ghost', duration: REVIVE_GHOST_DURATION });
+            if (killer) {
+                killer.reviveCharges += 1;
             }
+            io.to(roomId).emit('effectTriggered', { playerId: player.id, effects: ['revive'] });
+            return;
+        }
 
             player.isAlive = false;
             const bodyFood: Food[] = player.snake.map(segment => ({

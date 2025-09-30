@@ -11,16 +11,16 @@ type Position = {
 
 // Mirroring server types
 const FOOD_TYPES = {
-    NORMAL: { id: 1, color: '#ff0000', score: 10, length: 1, lifetime: 15000, name: "普通食物" },
-    FREEZE: { id: 2, color: '#00aaff', score: 20, effect: 'freeze', duration: 3000, lifetime: 8000, name: "冰冻果实" },
-    SPEED: { id: 3, color: '#ff5500', score: 30, effect: 'speed', duration: 5000, speedMultiplier: 2, lifetime: 8000, name: "加速辣椒" },
-    SHRINK: { id: 4, color: '#aa00ff', score: 20, effect: 'shrink', value: 3, lifetime: 8000, name: "缩小蘑菇" },
-    RAINBOW: { id: 5, color: 'rainbow', score: 50, effect: 'random', lifetime: 7000, name: "彩虹糖果" },
-    TELEPORT: { id: 6, color: 'linear-gradient(45deg, #00ffaa, #00aaff)', score: 20, effect: 'teleport', lifetime: 7000, name: "传送门" },
-    REVIVE: { id: 7, color: '#ffd700', score: 60, effect: 'revive', lifetime: 12000, name: "复活甲" },
-    GHOST: { id: 8, color: '#00ff00', score: 40, effect: 'ghost', duration: 6000, lifetime: 8000, name: "穿墙能力" },
-    INVINCIBLE: { id: 9, color: '#ffffff', score: 50, effect: 'invincible', duration: 5000, lifetime: 8000, name: "无敌状态" },
-    MAGNET: { id: 10, color: '#ff00ff', score: 30, effect: 'magnet', duration: 8000, lifetime: 8000, name: "磁铁" }
+    NORMAL: { id: 1, color: '#ff0000', score: 10, length: 1, lifetime: 15000, name: "普通食物", description: "增加体型并获得基础积分" },
+    FREEZE: { id: 2, color: '#00aaff', score: 20, effect: 'freeze', duration: 3000, lifetime: 8000, name: "冰冻果实", description: "束缚目标 3 秒，需提前规划走位" },
+    SPEED: { id: 3, color: '#ff5500', score: 30, effect: 'speed', duration: 5000, speedMultiplier: 2, lifetime: 8000, name: "加速辣椒", description: "5 秒疾速冲刺，追击或逃生首选" },
+    SHRINK: { id: 4, color: '#aa00ff', score: 20, effect: 'shrink', value: 3, lifetime: 8000, name: "缩小蘑菇", description: "瞬间瘦身 3 节，穿缝绕行更灵活" },
+    RAINBOW: { id: 5, color: 'rainbow', score: 50, effect: 'random', lifetime: 7000, name: "彩虹糖果", description: "随机触发增益或减益，考验手气的神秘糖" },
+    TELEPORT: { id: 6, color: 'linear-gradient(45deg, #00ffaa, #00aaff)', score: 20, effect: 'teleport', lifetime: 7000, name: "传送门", description: "瞬移至安全随机点，脱困反偷" },
+    REVIVE: { id: 7, color: '#ffd700', score: 60, effect: 'revive', lifetime: 12000, name: "复活甲", description: "死亡后原地满血复活并获得 3 秒无敌穿墙" },
+    GHOST: { id: 8, color: '#00ff00', score: 40, effect: 'ghost', duration: 6000, lifetime: 8000, name: "穿墙能力", description: "6 秒无视墙体，穿梭追击无压力" },
+    INVINCIBLE: { id: 9, color: '#ffffff', score: 50, effect: 'invincible', duration: 5000, lifetime: 8000, name: "无敌状态", description: "5 秒碰撞免疫，正面硬刚" },
+    MAGNET: { id: 10, color: '#ff00ff', score: 30, effect: 'magnet', duration: 8000, lifetime: 8000, name: "磁铁", description: "8 秒吸附周边食物，靠近即可收入囊中" }
 } as const;
 
 const FOOD_SOUNDS: Record<number, string> = {
@@ -34,6 +34,18 @@ const FOOD_SOUNDS: Record<number, string> = {
   8: "https://actions.google.com/sounds/v1/cartoon/air_swirl.ogg",
   9: "https://actions.google.com/sounds/v1/cartoon/siren_whistle.ogg",
   10: "https://actions.google.com/sounds/v1/cartoon/suction_pop.ogg",
+};
+const EFFECT_SOUNDS: Record<string, string> = {
+  freeze: "https://actions.google.com/sounds/v1/cartoon/metal_twang.ogg",
+  speed: "https://actions.google.com/sounds/v1/cartoon/slide_whistle_up.ogg",
+  shrink: "https://actions.google.com/sounds/v1/cartoon/slide_whistle_down.ogg",
+  grow: "https://actions.google.com/sounds/v1/cartoon/descending_whistle.ogg",
+  ghost: "https://actions.google.com/sounds/v1/cartoon/air_swirl.ogg",
+  invincible: "https://actions.google.com/sounds/v1/cartoon/siren_whistle.ogg",
+  magnet: "https://actions.google.com/sounds/v1/cartoon/suction_pop.ogg",
+  revive: "https://actions.google.com/sounds/v1/cartoon/fairy_dust_gliss.ogg",
+  teleport: "https://actions.google.com/sounds/v1/cartoon/ascending_whistle.ogg",
+  death: "https://actions.google.com/sounds/v1/cartoon/anvil_fall_and_hit.ogg",
 };
 
 const WIN_SOUND_SRC = "https://actions.google.com/sounds/v1/cartoon/ta_da.ogg";
@@ -130,7 +142,9 @@ export default function SnakeGame() {
   const foodAudioRefs = useRef<Record<number, HTMLAudioElement>>({});
   const winSoundRef = useRef<HTMLAudioElement>(null);
   const loseSoundRef = useRef<HTMLAudioElement>(null);
+  const effectAudioRefs = useRef<Record<string, HTMLAudioElement>>({});
   const playerIdRef = useRef<string>("");
+  const audioUnlockedRef = useRef(false);
 
   useEffect(() => {
     playerIdRef.current = playerId;
@@ -161,6 +175,51 @@ export default function SnakeGame() {
     }
   }, [playAudio]);
 
+  const playEffectSound = useCallback((effectType: string) => {
+    const audio = effectAudioRefs.current[effectType];
+    if (audio) {
+      playAudio(audio);
+      return;
+    }
+
+    const fallbackSrc = EFFECT_SOUNDS[effectType];
+    if (fallbackSrc) {
+      const fallback = new Audio(fallbackSrc);
+      fallback.preload = "auto";
+      playAudio(fallback);
+    }
+  }, [playAudio]);
+
+  const unlockAudio = useCallback(() => {
+    if (audioUnlockedRef.current) return;
+    const queued = [
+      ...Object.values(foodAudioRefs.current),
+      ...Object.values(effectAudioRefs.current),
+      winSoundRef.current,
+      loseSoundRef.current,
+    ].filter((audio): audio is HTMLAudioElement => Boolean(audio));
+
+    queued.forEach(audio => {
+      try {
+        audio.muted = true;
+        const playPromise = audio.play();
+        if (playPromise) {
+          playPromise.then(() => {
+            audio.pause();
+            audio.currentTime = 0;
+            audio.muted = false;
+          }).catch(() => {
+            audio.muted = false;
+          });
+        }
+      } catch (error) {
+        audio.muted = false;
+      }
+    });
+
+    audioUnlockedRef.current = true;
+  }, []);
+
   const playGameOverSound = useCallback((didWin: boolean) => {
     if (didWin) {
       playAudio(winSoundRef.current);
@@ -176,10 +235,23 @@ export default function SnakeGame() {
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
     socket = io(socketUrl);
 
-    socket.on("connect", () => console.log(`已连接到服务器: ${socketUrl}`));
+    socket.on("connect", () => {
+      console.log(`已连接到服务器: ${socketUrl}`);
+      unlockAudio();
+    });
     const handleFoodConsumed = ({ playerId: eaterId, foodTypeId }: { playerId: string; foodTypeId: number }) => {
       if (playerIdRef.current && eaterId === playerIdRef.current) {
         playFoodSound(foodTypeId);
+      }
+    };
+    const handleEffectTriggered = ({ playerId: effectPlayerId, effects }: { playerId: string; effects: string[] }) => {
+      if (playerIdRef.current && effectPlayerId === playerIdRef.current) {
+        effects.forEach(playEffectSound);
+      }
+    };
+    const handlePlayerDied = ({ playerId: deadPlayerId }: { playerId: string; killerId?: string }) => {
+      if (playerIdRef.current && deadPlayerId === playerIdRef.current) {
+        playEffectSound('death');
       }
     };
     socket.on('roomCreated', ({ roomId, playerId, isOwner }) => {
@@ -222,7 +294,9 @@ export default function SnakeGame() {
     });
     socket.on('error', (message) => alert(message));
     socket.on('foodConsumed', handleFoodConsumed);
-  }, [playFoodSound, playGameOverSound]);
+    socket.on('effectTriggered', handleEffectTriggered);
+    socket.on('playerDied', handlePlayerDied);
+  }, [playFoodSound, playGameOverSound, playEffectSound, unlockAudio]);
 
   useEffect(() => {
     if (multiplayerMode && playerName) {
@@ -236,7 +310,15 @@ export default function SnakeGame() {
       }
     };
   }, [multiplayerMode, playerName, socketInitializer]);
-  
+
+  useEffect(() => {
+    const pointerUnlock = () => unlockAudio();
+    window.addEventListener('pointerdown', pointerUnlock, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', pointerUnlock);
+    };
+  }, [unlockAudio]);
+
   const resetGame = useCallback(() => {
     if (multiplayerMode && isOwner) {
       socket?.emit('resetGame', { roomId });
@@ -263,6 +345,7 @@ export default function SnakeGame() {
 
   const startSinglePlayer = () => {
     // 跳转到demo.html单人模式
+    unlockAudio();
     window.location.href = `/demo.html?playerName=${encodeURIComponent(playerName)}`;
   };
 
@@ -287,6 +370,7 @@ export default function SnakeGame() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      unlockAudio();
       let newDirection: "UP" | "DOWN" | "LEFT" | "RIGHT" | null = null;
       switch (e.key) {
         case "ArrowUp": newDirection = "UP"; break;
@@ -301,15 +385,25 @@ export default function SnakeGame() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [roomId, multiplayerMode, changeDirection]);
+  }, [roomId, multiplayerMode, changeDirection, unlockAudio]);
 
-  const createRoom = () => socket?.emit('createRoom', { playerName, gridSize });
+  const createRoom = () => {
+    unlockAudio();
+    socket?.emit('createRoom', { playerName, gridSize });
+  };
   const joinRoom = () => {
     if (!joinRoomId.trim()) return;
+    unlockAudio();
     socket?.emit('joinRoom', { roomId: joinRoomId, playerName });
   };
-  const readyUp = () => socket?.emit('playerReady', { roomId });
-  const startGame = () => socket?.emit('startGame', { roomId });
+  const readyUp = () => {
+    unlockAudio();
+    socket?.emit('playerReady', { roomId });
+  };
+  const startGame = () => {
+    unlockAudio();
+    socket?.emit('startGame', { roomId });
+  };
 
   // Canvas drawing functions
   const drawGame = useCallback(() => {
@@ -428,7 +522,12 @@ export default function SnakeGame() {
 
     // Draw players
     players.forEach(player => {
-      if (!player.isAlive) return;
+      const shouldRender = player.isAlive || (!player.isAlive && player.snake.length > 0);
+      if (!shouldRender) return;
+
+      if (!player.isAlive) {
+        ctx.globalAlpha = 0.6;
+      }
 
       const invincibleEffect = player.effects.find(effect => effect.type === 'invincible');
       
@@ -466,7 +565,7 @@ export default function SnakeGame() {
         ctx.stroke();
 
         // Draw head direction
-        if (index === 0) {
+        if (index === 0 && player.isAlive) {
           ctx.fillStyle = invincibleEffect ? '#000000' : 'white';
           let eyeOffsetX = 0;
           let eyeOffsetY = 0;
@@ -513,6 +612,7 @@ export default function SnakeGame() {
           );
         }
       });
+      ctx.globalAlpha = 1;
       ctx.shadowBlur = 0;
     });
 
@@ -621,7 +721,10 @@ export default function SnakeGame() {
                   <div className="food-icon" style={{ background: food.color, color: food.id === 9 ? 'black' : 'white' }}>
                       {food.id === 10 ? 'X' : food.id}
                   </div>
-                  <span>{food.name}</span>
+                  <div className="food-text">
+                    <span>{food.name}</span>
+                    {food.description && <small>{food.description}</small>}
+                  </div>
               </div>
           ))}
       </div>
@@ -635,6 +738,7 @@ export default function SnakeGame() {
 
     const handleTouchStart = (e: TouchEvent) => {
       e.preventDefault();
+      unlockAudio();
       touchStartXRef.current = e.touches[0].clientX;
       touchStartYRef.current = e.touches[0].clientY;
       touchHandledRef.current = false;
@@ -642,6 +746,7 @@ export default function SnakeGame() {
 
     const handleTouchMove = (e: TouchEvent) => {
       e.preventDefault();
+      unlockAudio();
       if (!gameStarted || touchHandledRef.current) return;
 
       const touchEndX = e.touches[0].clientX;
@@ -714,6 +819,20 @@ export default function SnakeGame() {
               foodAudioRefs.current[numericId] = element;
             } else {
               delete foodAudioRefs.current[numericId];
+            }
+          }}
+          src={src}
+          preload="auto"
+        ></audio>
+      ))}
+      {Object.entries(EFFECT_SOUNDS).map(([effectType, src]) => (
+        <audio
+          key={effectType}
+          ref={(element) => {
+            if (element) {
+              effectAudioRefs.current[effectType] = element;
+            } else {
+              delete effectAudioRefs.current[effectType];
             }
           }}
           src={src}
