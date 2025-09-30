@@ -82,8 +82,19 @@ h1 {
     width: min(100%, 320px);
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 16px;
     min-width: 260px;
+}
+.sidebar-controls {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 8px;
+}
+.sidebar-controls button {
+    flex: 1 1 0;
+    min-width: 120px;
+    white-space: nowrap;
 }
 .players-panel, .foods-info, .effects-panel {
     background: rgba(0, 0, 0, 0.7);
@@ -349,6 +360,15 @@ button:disabled {
         flex: 1 1 auto;
         width: 100%;
         min-width: auto;
+        gap: 12px;
+    }
+    .sidebar-controls {
+        margin: 8px 0 4px;
+        width: 100%;
+    }
+    .sidebar-controls button {
+        flex: 1 1 50%;
+        max-width: none;
     }
     .container {
         gap: 16px;

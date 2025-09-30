@@ -73,6 +73,9 @@ const EFFECT_LABELS: Record<Effect['type'], string> = {
 type Food = Position & {
     type: typeof FOOD_TYPES[keyof typeof FOOD_TYPES];
     spawnTime: number;
+    customLifetime?: number;
+    isCorpse?: boolean;
+    corpseColor?: string;
 };
 
 type Player = {
@@ -501,9 +504,38 @@ export default function SnakeGame() {
     // Draw foods with effects
     const now = Date.now();
     foods.forEach(food => {
+      const lifetime = food.customLifetime ?? food.type.lifetime;
       const elapsed = now - food.spawnTime;
-      const remaining = food.type.lifetime - elapsed;
-      const percent = Math.max(0, Math.min(100, remaining / food.type.lifetime * 100));
+      const remaining = lifetime - elapsed;
+      const percent = lifetime > 0 ? Math.max(0, Math.min(100, remaining / lifetime * 100)) : 0;
+
+      if (food.isCorpse) {
+        const flickerVisible = Math.floor(elapsed / 120) % 2 === 0;
+        if (!flickerVisible) {
+          return;
+        }
+
+        const corpseColor = (() => {
+          const raw = food.corpseColor ?? '#ffffff';
+          if (raw.startsWith('bg-')) {
+            return raw.replace('bg-', '').replace('-500', '');
+          }
+          return raw;
+        })();
+
+        const cellX = offsetX + food.x * cellSize;
+        const cellY = offsetY + food.y * cellSize;
+
+        ctx.save();
+        ctx.globalAlpha = 0.6;
+        ctx.fillStyle = corpseColor;
+        ctx.fillRect(cellX + 1, cellY + 1, cellSize - 2, cellSize - 2);
+        ctx.strokeStyle = '#ffffffaa';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(cellX + 0.5, cellY + 0.5, cellSize - 1, cellSize - 1);
+        ctx.restore();
+        return;
+      }
 
       let fillStyle: string | CanvasGradient = food.type.color;
       if (food.type.color === 'rainbow') {
@@ -1065,15 +1097,8 @@ export default function SnakeGame() {
             <div className="sidebar">
                 {gameStarted && <EffectsPanel effects={currentPlayer?.effects || []} />}
 
-                <PlayerList
-                  players={players}
-                  currentPlayerId={playerId}
-                  open={playerListOpen}
-                  onToggle={() => setPlayerListOpen(prev => !prev)}
-                />
-
                 {!gameStarted && !gameOver && (
-                    <div className="controls-stack flex flex-col items-center gap-4 mt-4">
+                    <div className="sidebar-controls">
                         <button onClick={readyUp}>
                           {players.find(p => p.id === playerId)?.isReady ? '取消准备' : '准备'}
                         </button>
@@ -1084,7 +1109,14 @@ export default function SnakeGame() {
                         )}
                     </div>
                 )}
-                
+
+                <PlayerList
+                  players={players}
+                  currentPlayerId={playerId}
+                  open={playerListOpen}
+                  onToggle={() => setPlayerListOpen(prev => !prev)}
+                />
+
                 <FoodInfoPanel
                   open={foodPanelOpen}
                   onToggle={() => setFoodPanelOpen(prev => !prev)}

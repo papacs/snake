@@ -52,6 +52,9 @@ type Effect = {
 type Food = Position & {
     type: typeof FOOD_TYPES[keyof typeof FOOD_TYPES];
     spawnTime: number;
+    customLifetime?: number;
+    isCorpse?: boolean;
+    corpseColor?: string;
 };
 
 type Player = {
@@ -275,7 +278,10 @@ function startGameLoop(roomId: string) {
 
         // 1. Update food lifetime and remove expired food
         const initialFoodCount = room.foods.length;
-        room.foods = room.foods.filter(food => now - food.spawnTime < food.type.lifetime);
+        room.foods = room.foods.filter(food => {
+            const lifetime = food.customLifetime ?? food.type.lifetime;
+            return now - food.spawnTime < lifetime;
+        });
         const expiredCount = initialFoodCount - room.foods.length;
         if (expiredCount > 0) {
             for (let i = 0; i < expiredCount; i++) {
@@ -307,6 +313,7 @@ function startGameLoop(roomId: string) {
 
             for (let i = room.foods.length - 1; i >= 0; i--) {
                 const food = room.foods[i];
+                if (food.isCorpse) continue;
                 const dx = head.x - food.x;
                 const dy = head.y - food.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
@@ -340,6 +347,7 @@ function startGameLoop(roomId: string) {
                 .forEach(({ index, food, playerId }) => {
                     const eater = room.players.get(playerId);
                     if (!eater) return;
+                    if (food.isCorpse) return;
 
                     room.foods.splice(index, 1);
                     playersAteViaMagnet.add(playerId);
@@ -480,7 +488,12 @@ function startGameLoop(roomId: string) {
 
             player.isAlive = false;
             const bodyFood: Food[] = player.snake.map(segment => ({
-                ...segment, type: FOOD_TYPES.NORMAL, spawnTime: Date.now()
+                ...segment,
+                type: FOOD_TYPES.NORMAL,
+                spawnTime: Date.now(),
+                customLifetime: 2000,
+                isCorpse: true,
+                corpseColor: player.color
             }));
             room.foods.push(...bodyFood);
 
@@ -494,7 +507,7 @@ function startGameLoop(roomId: string) {
             if (!player.isAlive) return;
             
             const { head, newSnake } = nextPositions[player.id];
-            const foodIndex = room.foods.findIndex(f => Math.round(f.x) === head.x && Math.round(f.y) === head.y);
+            const foodIndex = room.foods.findIndex(f => !f.isCorpse && Math.round(f.x) === head.x && Math.round(f.y) === head.y);
             const ateByMagnet = playersAteViaMagnet.has(player.id);
 
             if (foodIndex !== -1) {
