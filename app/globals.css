@@ -200,6 +200,45 @@ h1 {
     line-height: 1.2;
 }
 
+@media (max-width: 900px) {
+    body {
+        padding: 12px;
+    }
+    .container {
+        width: 100vw;
+        min-height: 100vh;
+        padding: 0;
+        gap: 16px;
+    }
+    header {
+        width: 100%;
+        padding: 0 12px;
+    }
+    .game-area {
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+    }
+    .canvas-wrapper {
+        width: 100%;
+        min-width: 0;
+        flex: 0 0 auto;
+        display: flex;
+        justify-content: center;
+    }
+    .sidebar {
+        width: 100%;
+        min-width: 0;
+        flex: 0 0 auto;
+    }
+    .desktop-only {
+        display: none;
+    }
+    .mobile-only {
+        display: block;
+    }
+}
+
 .kill-feed {
     position: fixed;
     top: clamp(60px, 10vh, 120px);
