@@ -125,6 +125,29 @@ export default function SnakeGame() {
   const [foods, setFoods] = useState<Food[]>([]);
   const [gameOver, setGameOver] = useState(false);
   const [winner, setWinner] = useState<Player | null>(null);
+  const [viewport, setViewport] = useState({ width: 0, height: 0 });
+
+  const clonePlayerState = (player: Player): Player => ({
+    ...player,
+    snake: player.snake.map(p => ({ ...p })),
+    effects: player.effects.map(e => ({ ...e })),
+  });
+
+  const applyLocalPrediction = useCallback((direction: "UP" | "DOWN" | "LEFT" | "RIGHT") => {
+    // Placeholder for local prediction logic
+  }, []);
+
+  const clearKillFeed = useCallback(() => {
+    // Placeholder for clearing kill feed
+  }, []);
+
+  const enqueueKillAnnouncement = useCallback(() => {
+    // Placeholder for enqueueing kill announcements
+  }, []);
+
+  const applyStateDelta = useCallback(() => {
+    // Placeholder for applying state delta
+  }, []);
   
   // Canvas ref
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -142,6 +165,23 @@ export default function SnakeGame() {
   const latestServerTickRef = useRef(0);
   const gridSizeRef = useRef(gridSize);
   const killTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleResize = () => {
+      setViewport({ width: window.innerWidth, height: window.innerHeight });
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1204,18 +1244,3 @@ export default function SnakeGame() {
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
