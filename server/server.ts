@@ -396,10 +396,6 @@ const GAME_SPEED = 250; // 绋嶅井鍔犲揩鍩虹娓告垙閫熷害
 const REVIVE_IMMUNITY_DURATION = 3000;
 const REVIVE_GHOST_DURATION = 3000;
 const MAX_ROOM_PLAYERS = 4;
-const DASH_SPEED_MULTIPLIER = 2;
-const DASH_DURATION_MS = 2000;
-const DASH_COOLDOWN_MS = 3000;
-const DASH_INPUT_WINDOW_MS = 250;
 
 const colors = ["bg-green-500", "bg-blue-500", "bg-yellow-500", "bg-purple-500"];
 
