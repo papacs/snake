@@ -97,70 +97,6 @@ type Player = {
   reviveCharges: number;
 };
 
-type PlayerMovementDelta = {
-  head: Position;
-  removedTail: number;
-};
-
-type PlayerDelta = {
-  id: string;
-  movement?: PlayerMovementDelta;
-  fullSnake?: Position[];
-  direction?: Player['direction'];
-  isAlive?: boolean;
-  score?: number;
-  effects?: Effect[];
-  reviveCharges?: number;
-  color?: string;
-};
-
-type FoodUpdate = Pick<Food, 'id' | 'x' | 'y' | 'spawnTime' | 'customLifetime' | 'isCorpse' | 'corpseColor'>;
-
-type StateDelta = {
-  tick: number;
-  players?: PlayerDelta[];
-  removedPlayers?: string[];
-  foods?: {
-    added?: Food[];
-    updated?: FoodUpdate[];
-    removed?: string[];
-  };
-};
-
-type KillEvent = {
-  id: string;
-  killerId: string;
-  killerName: string;
-  victimId: string;
-  victimName: string;
-  timestamp: number;
-};
-
-const clonePosition = (position: Position): Position => ({ x: position.x, y: position.y });
-const cloneSnake = (snake: Position[]): Position[] => snake.map(clonePosition);
-const cloneEffects = (effects: Effect[]): Effect[] => effects.map(effect => ({ ...effect }));
-const clonePlayerState = (player: Player): Player => ({
-  ...player,
-  snake: cloneSnake(player.snake),
-  effects: cloneEffects(player.effects),
-});
-const cloneFoodState = (food: Food): Food => ({
-  ...food,
-});
-
-const dedupeSnake = (snake: Position[]): Position[] => {
-  if (snake.length <= 1) return snake;
-  const deduped: Position[] = [];
-  let last: Position | null = null;
-  for (const segment of snake) {
-    if (!last || last.x !== segment.x || last.y !== segment.y) {
-      deduped.push(segment);
-      last = segment;
-    }
-  }
-  return deduped;
-};
-
 type RoomSummary = {
   roomId: string;
   playerCount: number;
@@ -189,11 +125,6 @@ export default function SnakeGame() {
   const [foods, setFoods] = useState<Food[]>([]);
   const [gameOver, setGameOver] = useState(false);
   const [winner, setWinner] = useState<Player | null>(null);
-  const [killFeed, setKillFeed] = useState<KillEvent[]>([]);
-  const [viewport, setViewport] = useState(() => ({
-    width: typeof window === 'undefined' ? 1024 : window.innerWidth,
-    height: typeof window === 'undefined' ? 768 : window.innerHeight,
-  }));
   
   // Canvas ref
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -220,24 +151,12 @@ export default function SnakeGame() {
       const viewportHeight = window.innerHeight;
       const hasRoomForSidebar = viewportWidth > 900;
       const sidebarAllowance = hasRoomForSidebar ? 340 : 0;
-      const paddingAllowance = hasRoomForSidebar ? 120 : 24;
-      const rawWidth = viewportWidth - sidebarAllowance - paddingAllowance;
-      const widthBudget = hasRoomForSidebar ? Math.max(320, rawWidth) : Math.max(240, viewportWidth - 16);
-
-      const safeGridSize = gridSize > 0 ? gridSize : DEFAULT_GRID_SIZE;
-      const baseWidthCandidate = Math.floor(widthBudget / BASE_GRID_SIZE);
-
-      const headerAllowance = hasRoomForSidebar ? 220 : 140;
-      const availableHeight = Math.max(240, viewportHeight - headerAllowance);
-      const heightCandidate = Math.floor(availableHeight / safeGridSize);
-
-      const candidate = heightCandidate > 0 ? Math.min(baseWidthCandidate, heightCandidate) : baseWidthCandidate;
-      const clampedBase = Math.min(MAX_CELL_SIZE, Math.max(MIN_CELL_SIZE, candidate));
-      const scale = BASE_GRID_SIZE / safeGridSize;
-      const scaled = Math.max(MIN_CELL_SIZE, Math.floor(clampedBase * scale));
-
-      setCellSize(scaled);
-      setViewport({ width: viewportWidth, height: viewportHeight });
+      const paddingAllowance = hasRoomForSidebar ? 120 : 60;
+      const rawAvailable = window.innerWidth - sidebarAllowance - paddingAllowance;
+      const availableWidth = Math.max(320, Math.min(rawAvailable, 1024));
+      const candidate = Math.floor(availableWidth / gridSize);
+      const nextSize = Math.min(36, Math.max(18, candidate));
+      setCellSize(nextSize);
     };
 
     computeCellSize();
@@ -247,6 +166,10 @@ export default function SnakeGame() {
       window.removeEventListener('resize', computeCellSize);
       window.removeEventListener('orientationchange', computeCellSize);
     };
+  }, [gridSize]);
+
+  useEffect(() => {
+    gridSizeRef.current = gridSize;
   }, [gridSize]);
 
   useEffect(() => {
@@ -372,173 +295,6 @@ export default function SnakeGame() {
     }
   }, [playAudio]);
 
-  const applyStateDelta = useCallback((delta: StateDelta) => {
-    if (!delta || !delta.tick) return;
-    if (delta.tick <= latestServerTickRef.current) {
-      return;
-    }
-    latestServerTickRef.current = delta.tick;
-
-    const playersMap = new Map(playersRef.current);
-    const foodsMap = new Map(foodsRef.current);
-
-    delta.players?.forEach(playerDelta => {
-      const base = playersMap.get(playerDelta.id) ?? playersRef.current.get(playerDelta.id);
-      if (!base) {
-        if (playerDelta.fullSnake) {
-          const fallback: Player = {
-            id: playerDelta.id,
-            name: '',
-            isReady: false,
-            snake: cloneSnake(playerDelta.fullSnake),
-            direction: playerDelta.direction ?? 'RIGHT',
-            color: playerDelta.color ?? '#ffffff',
-            isAlive: playerDelta.isAlive ?? true,
-            score: playerDelta.score ?? 0,
-            effects: playerDelta.effects ? cloneEffects(playerDelta.effects) : [],
-            reviveCharges: playerDelta.reviveCharges ?? 0,
-          };
-          playersMap.set(playerDelta.id, fallback);
-        }
-        return;
-      }
-
-      const nextPlayer = clonePlayerState(base);
-
-      if (playerDelta.fullSnake) {
-        nextPlayer.snake = cloneSnake(playerDelta.fullSnake);
-      } else if (playerDelta.movement) {
-        const baseSnake = nextPlayer.snake.map(clonePosition);
-        if (baseSnake.length > 0) {
-          const nextHead = baseSnake[0];
-          if (nextHead.x === playerDelta.movement.head.x && nextHead.y === playerDelta.movement.head.y) {
-            baseSnake.shift();
-          }
-        }
-        const newSnake = [clonePosition(playerDelta.movement.head), ...baseSnake];
-        const trims = Math.min(playerDelta.movement.removedTail, newSnake.length > 1 ? newSnake.length - 1 : 0);
-        for (let i = 0; i < trims; i += 1) {
-          newSnake.pop();
-        }
-        nextPlayer.snake = dedupeSnake(newSnake);
-      }
-
-      if (playerDelta.direction) {
-        nextPlayer.direction = playerDelta.direction;
-      }
-
-      if (playerDelta.isAlive !== undefined) {
-        nextPlayer.isAlive = playerDelta.isAlive;
-        if (!playerDelta.isAlive && !playerDelta.fullSnake) {
-          nextPlayer.snake = [];
-        }
-      }
-
-      if (playerDelta.score !== undefined) {
-        nextPlayer.score = playerDelta.score;
-      }
-
-      if (playerDelta.effects) {
-        nextPlayer.effects = cloneEffects(playerDelta.effects);
-      }
-
-      if (playerDelta.reviveCharges !== undefined) {
-        nextPlayer.reviveCharges = playerDelta.reviveCharges;
-      }
-
-      if (playerDelta.color) {
-        nextPlayer.color = playerDelta.color;
-      }
-
-      playersMap.set(playerDelta.id, nextPlayer);
-    });
-
-    delta.removedPlayers?.forEach(id => {
-      playersMap.delete(id);
-    });
-
-    if (delta.foods) {
-      delta.foods.added?.forEach(food => {
-        foodsMap.set(food.id, cloneFoodState(food));
-      });
-      delta.foods.updated?.forEach(update => {
-        const existing = foodsMap.get(update.id);
-        if (!existing) return;
-        foodsMap.set(update.id, {
-          ...existing,
-          ...update,
-        });
-      });
-      delta.foods.removed?.forEach(id => {
-        foodsMap.delete(id);
-      });
-    }
-
-    playersRef.current = playersMap;
-    foodsRef.current = foodsMap;
-
-    setPlayers(Array.from(playersMap.values()));
-    setFoods(Array.from(foodsMap.values()));
-  }, [setPlayers, setFoods]);
-
-  const applyLocalPrediction = useCallback((newDirection: Player['direction']) => {
-    const localPlayerId = playerIdRef.current;
-    if (!localPlayerId) return;
-    const base = playersRef.current.get(localPlayerId);
-    if (!base || !base.isAlive || base.snake.length === 0) return;
-
-    const predicted = clonePlayerState(base);
-    predicted.direction = newDirection;
-
-    const head = clonePosition(predicted.snake[0]);
-    switch (newDirection) {
-      case 'UP': head.y -= 1; break;
-      case 'DOWN': head.y += 1; break;
-      case 'LEFT': head.x -= 1; break;
-      case 'RIGHT': head.x += 1; break;
-    }
-
-    const grid = gridSizeRef.current;
-    head.x = Math.max(0, Math.min(grid - 1, head.x));
-    head.y = Math.max(0, Math.min(grid - 1, head.y));
-
-    const newSnake = [head, ...predicted.snake.map(clonePosition)];
-    const willEat = Array.from(foodsRef.current.values()).some(food => !food.isCorpse && Math.round(food.x) === head.x && Math.round(food.y) === head.y);
-    if (!willEat) {
-      newSnake.pop();
-    }
-    predicted.snake = newSnake;
-
-    const playersMap = new Map(playersRef.current);
-    playersMap.set(localPlayerId, predicted);
-    playersRef.current = playersMap;
-    setPlayers(Array.from(playersMap.values()));
-  }, [setPlayers]);
-
-  const enqueueKillAnnouncement = useCallback((payload: { killerId: string; killerName: string; victimId: string; victimName: string; timestamp: number; }) => {
-    const id = `${payload.timestamp}-${payload.killerId}-${payload.victimId}`;
-    setKillFeed(prev => {
-      const withoutDuplicate = prev.filter(event => event.id !== id);
-      const next = [...withoutDuplicate, { ...payload, id }];
-      return next.slice(-4);
-    });
-    const existingTimeout = killTimeoutsRef.current.get(id);
-    if (existingTimeout) {
-      clearTimeout(existingTimeout);
-    }
-    const timeoutId = setTimeout(() => {
-      setKillFeed(prev => prev.filter(event => event.id !== id));
-      killTimeoutsRef.current.delete(id);
-    }, 4000);
-    killTimeoutsRef.current.set(id, timeoutId);
-  }, [setKillFeed]);
-
-  const clearKillFeed = useCallback(() => {
-    killTimeoutsRef.current.forEach(timeoutId => clearTimeout(timeoutId));
-    killTimeoutsRef.current.clear();
-    setKillFeed([]);
-  }, [setKillFeed]);
-
   const socketInitializer = useCallback(() => {
     // --- DEBUG LINE ---
     console.log("Attempting to connect to socket server at:", process.env.NEXT_PUBLIC_SOCKET_URL);
@@ -590,26 +346,14 @@ export default function SnakeGame() {
       latestServerTickRef.current = 0;
       clearKillFeed();
       if (initialGameState.gridSize) setGridSize(initialGameState.gridSize);
-
-      if (Array.isArray(initialGameState.players)) {
-        const typedPlayers = initialGameState.players as Player[];
-        setPlayers(typedPlayers);
-        playersRef.current = new Map(typedPlayers.map((player) => [player.id, clonePlayerState(player)]));
-      } else {
-        playersRef.current.clear();
-      }
-
-      if (Array.isArray(initialGameState.foods)) {
-        const typedFoods = initialGameState.foods as Food[];
-        setFoods(typedFoods);
-        foodsRef.current = new Map(typedFoods.map((food) => [food.id, cloneFoodState(food)]));
-      } else {
-        foodsRef.current.clear();
-        setFoods([]);
-      }
+      if (initialGameState.players) setPlayers(initialGameState.players);
+      if (initialGameState.foods) setFoods(initialGameState.foods);
     });
-    socket.on('stateDelta', applyStateDelta);
-    socket.on('killAnnouncement', enqueueKillAnnouncement);
+    socket.on('gameState', ({ players, foods, gridSize }: { players: Player[], foods: Food[], gridSize: number }) => {
+      setPlayers(players);
+      setFoods(foods);
+      if (gridSize) setGridSize(gridSize);
+    });
     socket.on('gameOver', (winner) => {
       if (playerIdRef.current) {
         const didWin = Boolean(winner && winner.id === playerIdRef.current);
@@ -1302,17 +1046,6 @@ export default function SnakeGame() {
       ))}
       <audio ref={winSoundRef} src={WIN_SOUND_SRC} preload="auto"></audio>
       <audio ref={loseSoundRef} src={LOSE_SOUND_SRC} preload="auto"></audio>
-      {killFeed.length > 0 && (
-        <div className="kill-feed">
-          {killFeed.map((event) => (
-            <div key={event.id} className="kill-feed-item">
-              <span className="kill-feed-killer">{event.killerName}</span>
-              <span className="kill-feed-verb"> defeated </span>
-              <span className="kill-feed-victim">{event.victimName}</span>
-            </div>
-          ))}
-        </div>
-      )}
       <div 
         ref={touchOverlayRef}
         style={{
