@@ -24,6 +24,11 @@ const FOOD_TYPES = {
 } as const;
 
 const MAGIC_CHIME = "https://actions.google.com/sounds/v1/cartoon/magic_chime.ogg";
+
+const BASE_GRID_SIZE = 17;
+const DEFAULT_GRID_SIZE = BASE_GRID_SIZE * 2;
+const MIN_CELL_SIZE = 14;
+const MAX_CELL_SIZE = 28;
 const FOOD_SOUNDS: Record<number, string> = {
   1: "https://actions.google.com/sounds/v1/cartoon/pop.ogg",
   2: "https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg",
@@ -71,6 +76,7 @@ const EFFECT_LABELS: Record<Effect['type'], string> = {
 };
 
 type Food = Position & {
+    id: string;
     type: typeof FOOD_TYPES[keyof typeof FOOD_TYPES];
     spawnTime: number;
     customLifetime?: number;
@@ -90,6 +96,57 @@ type Player = {
   effects: Effect[];
   reviveCharges: number;
 };
+
+type PlayerMovementDelta = {
+  head: Position;
+  removedTail: number;
+};
+
+type PlayerDelta = {
+  id: string;
+  movement?: PlayerMovementDelta;
+  fullSnake?: Position[];
+  direction?: Player['direction'];
+  isAlive?: boolean;
+  score?: number;
+  effects?: Effect[];
+  reviveCharges?: number;
+  color?: string;
+};
+
+type FoodUpdate = Pick<Food, 'id' | 'x' | 'y' | 'spawnTime' | 'customLifetime' | 'isCorpse' | 'corpseColor'>;
+
+type StateDelta = {
+  tick: number;
+  players?: PlayerDelta[];
+  removedPlayers?: string[];
+  foods?: {
+    added?: Food[];
+    updated?: FoodUpdate[];
+    removed?: string[];
+  };
+};
+
+type KillEvent = {
+  id: string;
+  killerId: string;
+  killerName: string;
+  victimId: string;
+  victimName: string;
+  timestamp: number;
+};
+
+const clonePosition = (position: Position): Position => ({ x: position.x, y: position.y });
+const cloneSnake = (snake: Position[]): Position[] => snake.map(clonePosition);
+const cloneEffects = (effects: Effect[]): Effect[] => effects.map(effect => ({ ...effect }));
+const clonePlayerState = (player: Player): Player => ({
+  ...player,
+  snake: cloneSnake(player.snake),
+  effects: cloneEffects(player.effects),
+});
+const cloneFoodState = (food: Food): Food => ({
+  ...food,
+});
 
 type RoomSummary = {
   roomId: string;
@@ -111,14 +168,15 @@ export default function SnakeGame() {
   const [playerListOpen, setPlayerListOpen] = useState(true);
 
   // Game state
-  const [gridSize, setGridSize] = useState(17);
-  const [cellSize, setCellSize] = useState(28);
+  const [gridSize, setGridSize] = useState(DEFAULT_GRID_SIZE);
+  const [cellSize, setCellSize] = useState(MIN_CELL_SIZE);
 
   const [playerName, setPlayerName] = useState("");
   const [gameStarted, setGameStarted] = useState(false);
   const [foods, setFoods] = useState<Food[]>([]);
   const [gameOver, setGameOver] = useState(false);
   const [winner, setWinner] = useState<Player | null>(null);
+  const [killFeed, setKillFeed] = useState<KillEvent[]>([]);
   
   // Canvas ref
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -131,6 +189,11 @@ export default function SnakeGame() {
   const touchStartXRef = useRef<number>(0);
   const touchStartYRef = useRef<number>(0);
   const touchHandledRef = useRef<boolean>(false);
+  const playersRef = useRef<Map<string, Player>>(new Map());
+  const foodsRef = useRef<Map<string, Food>>(new Map());
+  const latestServerTickRef = useRef(0);
+  const gridSizeRef = useRef(gridSize);
+  const killTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -141,14 +204,24 @@ export default function SnakeGame() {
       const paddingAllowance = hasRoomForSidebar ? 120 : 60;
       const rawAvailable = window.innerWidth - sidebarAllowance - paddingAllowance;
       const availableWidth = Math.max(320, Math.min(rawAvailable, 1024));
-      const candidate = Math.floor(availableWidth / gridSize);
-      const nextSize = Math.min(36, Math.max(18, candidate));
-      setCellSize(nextSize);
+
+      const baseCandidate = Math.floor(availableWidth / BASE_GRID_SIZE);
+      const clampedBase = Math.min(MAX_CELL_SIZE, Math.max(MIN_CELL_SIZE, baseCandidate));
+
+      const safeGridSize = gridSize > 0 ? gridSize : DEFAULT_GRID_SIZE;
+      const scale = BASE_GRID_SIZE / safeGridSize;
+      const scaled = Math.max(MIN_CELL_SIZE, Math.floor(clampedBase * scale));
+
+      setCellSize(scaled);
     };
 
     computeCellSize();
     window.addEventListener('resize', computeCellSize);
     return () => window.removeEventListener('resize', computeCellSize);
+  }, [gridSize]);
+
+  useEffect(() => {
+    gridSizeRef.current = gridSize;
   }, [gridSize]);
 
   // Current player
@@ -253,6 +326,165 @@ export default function SnakeGame() {
     }
   }, [playAudio]);
 
+  const applyStateDelta = useCallback((delta: StateDelta) => {
+    if (!delta || !delta.tick) return;
+    if (delta.tick <= latestServerTickRef.current) {
+      return;
+    }
+    latestServerTickRef.current = delta.tick;
+
+    const playersMap = new Map(playersRef.current);
+    const foodsMap = new Map(foodsRef.current);
+
+    delta.players?.forEach(playerDelta => {
+      const base = playersMap.get(playerDelta.id) ?? playersRef.current.get(playerDelta.id);
+      if (!base) {
+        if (playerDelta.fullSnake) {
+          const fallback: Player = {
+            id: playerDelta.id,
+            name: '',
+            isReady: false,
+            snake: cloneSnake(playerDelta.fullSnake),
+            direction: playerDelta.direction ?? 'RIGHT',
+            color: playerDelta.color ?? '#ffffff',
+            isAlive: playerDelta.isAlive ?? true,
+            score: playerDelta.score ?? 0,
+            effects: playerDelta.effects ? cloneEffects(playerDelta.effects) : [],
+            reviveCharges: playerDelta.reviveCharges ?? 0,
+          };
+          playersMap.set(playerDelta.id, fallback);
+        }
+        return;
+      }
+
+      const nextPlayer = clonePlayerState(base);
+
+      if (playerDelta.fullSnake) {
+        nextPlayer.snake = cloneSnake(playerDelta.fullSnake);
+      } else if (playerDelta.movement) {
+        const newSnake = [clonePosition(playerDelta.movement.head), ...nextPlayer.snake.map(clonePosition)];
+        for (let i = 0; i < playerDelta.movement.removedTail && newSnake.length > 0; i += 1) {
+          newSnake.pop();
+        }
+        nextPlayer.snake = newSnake;
+      }
+
+      if (playerDelta.direction) {
+        nextPlayer.direction = playerDelta.direction;
+      }
+
+      if (playerDelta.isAlive !== undefined) {
+        nextPlayer.isAlive = playerDelta.isAlive;
+        if (!playerDelta.isAlive && !playerDelta.fullSnake) {
+          nextPlayer.snake = [];
+        }
+      }
+
+      if (playerDelta.score !== undefined) {
+        nextPlayer.score = playerDelta.score;
+      }
+
+      if (playerDelta.effects) {
+        nextPlayer.effects = cloneEffects(playerDelta.effects);
+      }
+
+      if (playerDelta.reviveCharges !== undefined) {
+        nextPlayer.reviveCharges = playerDelta.reviveCharges;
+      }
+
+      if (playerDelta.color) {
+        nextPlayer.color = playerDelta.color;
+      }
+
+      playersMap.set(playerDelta.id, nextPlayer);
+    });
+
+    delta.removedPlayers?.forEach(id => {
+      playersMap.delete(id);
+    });
+
+    if (delta.foods) {
+      delta.foods.added?.forEach(food => {
+        foodsMap.set(food.id, cloneFoodState(food));
+      });
+      delta.foods.updated?.forEach(update => {
+        const existing = foodsMap.get(update.id);
+        if (!existing) return;
+        foodsMap.set(update.id, {
+          ...existing,
+          ...update,
+        });
+      });
+      delta.foods.removed?.forEach(id => {
+        foodsMap.delete(id);
+      });
+    }
+
+    playersRef.current = playersMap;
+    foodsRef.current = foodsMap;
+
+    setPlayers(Array.from(playersMap.values()));
+    setFoods(Array.from(foodsMap.values()));
+  }, [setPlayers, setFoods]);
+
+  const applyLocalPrediction = useCallback((newDirection: Player['direction']) => {
+    const localPlayerId = playerIdRef.current;
+    if (!localPlayerId) return;
+    const base = playersRef.current.get(localPlayerId);
+    if (!base || !base.isAlive || base.snake.length === 0) return;
+
+    const predicted = clonePlayerState(base);
+    predicted.direction = newDirection;
+
+    const head = clonePosition(predicted.snake[0]);
+    switch (newDirection) {
+      case 'UP': head.y -= 1; break;
+      case 'DOWN': head.y += 1; break;
+      case 'LEFT': head.x -= 1; break;
+      case 'RIGHT': head.x += 1; break;
+    }
+
+    const grid = gridSizeRef.current;
+    head.x = Math.max(0, Math.min(grid - 1, head.x));
+    head.y = Math.max(0, Math.min(grid - 1, head.y));
+
+    const newSnake = [head, ...predicted.snake.map(clonePosition)];
+    const willEat = Array.from(foodsRef.current.values()).some(food => !food.isCorpse && Math.round(food.x) === head.x && Math.round(food.y) === head.y);
+    if (!willEat) {
+      newSnake.pop();
+    }
+    predicted.snake = newSnake;
+
+    const playersMap = new Map(playersRef.current);
+    playersMap.set(localPlayerId, predicted);
+    playersRef.current = playersMap;
+    setPlayers(Array.from(playersMap.values()));
+  }, [setPlayers]);
+
+  const enqueueKillAnnouncement = useCallback((payload: { killerId: string; killerName: string; victimId: string; victimName: string; timestamp: number; }) => {
+    const id = `${payload.timestamp}-${payload.killerId}-${payload.victimId}`;
+    setKillFeed(prev => {
+      const withoutDuplicate = prev.filter(event => event.id !== id);
+      const next = [...withoutDuplicate, { ...payload, id }];
+      return next.slice(-4);
+    });
+    const existingTimeout = killTimeoutsRef.current.get(id);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+    }
+    const timeoutId = window.setTimeout(() => {
+      setKillFeed(prev => prev.filter(event => event.id !== id));
+      killTimeoutsRef.current.delete(id);
+    }, 4000);
+    killTimeoutsRef.current.set(id, timeoutId);
+  }, [setKillFeed]);
+
+  const clearKillFeed = useCallback(() => {
+    killTimeoutsRef.current.forEach(timeoutId => clearTimeout(timeoutId));
+    killTimeoutsRef.current.clear();
+    setKillFeed([]);
+  }, [setKillFeed]);
+
   const socketInitializer = useCallback(() => {
     // --- DEBUG LINE ---
     console.log("Attempting to connect to socket server at:", process.env.NEXT_PUBLIC_SOCKET_URL);
@@ -292,21 +524,36 @@ export default function SnakeGame() {
       setRoomError('');
       socket?.emit('requestRoomList');
     });
-    socket.on('updatePlayers', (updatedPlayers: Player[]) => setPlayers(updatedPlayers));
+    socket.on('updatePlayers', (updatedPlayers: Player[]) => {
+      setPlayers(updatedPlayers);
+      playersRef.current = new Map(updatedPlayers.map(player => [player.id, clonePlayerState(player)]));
+    });
     socket.on('gameStarted', (initialGameState) => {
       setGameOver(false);
       setWinner(null);
       setGameStarted(true);
       setRoomError('');
+      latestServerTickRef.current = 0;
+      clearKillFeed();
       if (initialGameState.gridSize) setGridSize(initialGameState.gridSize);
-      if (initialGameState.players) setPlayers(initialGameState.players);
-      if (initialGameState.foods) setFoods(initialGameState.foods);
+
+      if (Array.isArray(initialGameState.players)) {
+        setPlayers(initialGameState.players);
+        playersRef.current = new Map(initialGameState.players.map(player => [player.id, clonePlayerState(player)]));
+      } else {
+        playersRef.current.clear();
+      }
+
+      if (Array.isArray(initialGameState.foods)) {
+        setFoods(initialGameState.foods);
+        foodsRef.current = new Map(initialGameState.foods.map(food => [food.id, cloneFoodState(food)]));
+      } else {
+        foodsRef.current.clear();
+        setFoods([]);
+      }
     });
-    socket.on('gameState', ({ players, foods, gridSize }: { players: Player[], foods: Food[], gridSize: number }) => {
-      setPlayers(players);
-      setFoods(foods);
-      if (gridSize) setGridSize(gridSize);
-    });
+    socket.on('stateDelta', applyStateDelta);
+    socket.on('killAnnouncement', enqueueKillAnnouncement);
     socket.on('gameOver', (winner) => {
       if (playerIdRef.current) {
         const didWin = Boolean(winner && winner.id === playerIdRef.current);
@@ -320,6 +567,10 @@ export default function SnakeGame() {
       setGameStarted(false);
       setGameOver(false);
       setWinner(null);
+      latestServerTickRef.current = 0;
+      foodsRef.current.clear();
+      setFoods([]);
+      clearKillFeed();
     });
     socket.on('roomList', (list: RoomSummary[]) => setRoomsSummary(list));
     socket.on('leftRoom', () => {
@@ -331,6 +582,10 @@ export default function SnakeGame() {
       setWinner(null);
       setFoods([]);
       setRoomError('');
+      latestServerTickRef.current = 0;
+      playersRef.current.clear();
+      foodsRef.current.clear();
+      clearKillFeed();
       socket?.emit('requestRoomList');
     });
     socket.on('error', (message) => {
@@ -341,7 +596,7 @@ export default function SnakeGame() {
     socket.on('effectTriggered', handleEffectTriggered);
     socket.on('playerDied', handlePlayerDied);
     socket?.emit('requestRoomList');
-  }, [playFoodSound, playGameOverSound, playEffectSound, unlockAudio]);
+  }, [applyStateDelta, clearKillFeed, enqueueKillAnnouncement, playFoodSound, playGameOverSound, playEffectSound, unlockAudio]);
 
   useEffect(() => {
     if (multiplayerMode && playerName) {
@@ -353,8 +608,9 @@ export default function SnakeGame() {
         socket.disconnect();
         socket = null;
       }
+      clearKillFeed();
     };
-  }, [multiplayerMode, playerName, socketInitializer]);
+  }, [clearKillFeed, multiplayerMode, playerName, socketInitializer]);
 
   useEffect(() => {
     const pointerUnlock = () => unlockAudio();
@@ -388,7 +644,11 @@ export default function SnakeGame() {
     setFoods([]);
     setRoomsSummary([]);
     setRoomError('');
-  }, []);
+    playersRef.current.clear();
+    foodsRef.current.clear();
+    latestServerTickRef.current = 0;
+    clearKillFeed();
+  }, [clearKillFeed]);
 
   const startSinglePlayer = () => {
     // 跳转到单人模式页面
@@ -399,7 +659,8 @@ export default function SnakeGame() {
   const changeDirection = useCallback((newDirection: "UP" | "DOWN" | "LEFT" | "RIGHT") => {
     if (multiplayerMode) {
       if (socket && roomId) {
-        socket?.emit('changeDirection', { roomId, direction: newDirection });
+        socket.emit('changeDirection', { roomId, direction: newDirection });
+        applyLocalPrediction(newDirection);
       }
     } else {
       setPlayers(prevPlayers => {
@@ -413,7 +674,7 @@ export default function SnakeGame() {
         return prevPlayers;
       });
     }
-  }, [multiplayerMode, roomId]);
+  }, [applyLocalPrediction, multiplayerMode, roomId]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -755,7 +1016,7 @@ export default function SnakeGame() {
       setFoods(prevFoods => {
         const head = currentPlayer.snake[0];
         const magnetRadius = 5;
-        const updatedFoods = [...prevFoods];
+        const updatedFoods = prevFoods.map(food => ({ ...food }));
 
         updatedFoods.forEach(food => {
           const dx = food.x - head.x;
@@ -771,6 +1032,7 @@ export default function SnakeGame() {
           }
         });
 
+        foodsRef.current = new Map(updatedFoods.map(food => [food.id, { ...food }]));
         return updatedFoods;
       });
     }, 100);
@@ -984,6 +1246,17 @@ export default function SnakeGame() {
       ))}
       <audio ref={winSoundRef} src={WIN_SOUND_SRC} preload="auto"></audio>
       <audio ref={loseSoundRef} src={LOSE_SOUND_SRC} preload="auto"></audio>
+      {killFeed.length > 0 && (
+        <div className="kill-feed">
+          {killFeed.map((event) => (
+            <div key={event.id} className="kill-feed-item">
+              <span className="kill-feed-killer">{event.killerName}</span>
+              <span className="kill-feed-verb"> 终结了 </span>
+              <span className="kill-feed-victim">{event.victimName}</span>
+            </div>
+          ))}
+        </div>
+      )}
       <div 
         ref={touchOverlayRef}
         style={{

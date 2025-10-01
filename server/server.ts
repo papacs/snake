@@ -50,6 +50,7 @@ type Effect = {
 };
 
 type Food = Position & {
+    id: string;
     type: typeof FOOD_TYPES[keyof typeof FOOD_TYPES];
     spawnTime: number;
     customLifetime?: number;
@@ -81,9 +82,309 @@ type Room = {
   ownerId: string;
   gridSize: number;
   usedColors: Set<number>; // Track which color indices are in use
+  stateVersion: number;
+  snapshot: RoomSnapshot;
 };
 
+type PlayerSnapshot = {
+  id: string;
+  snake: Position[];
+  direction: Player['direction'];
+  isAlive: boolean;
+  score: number;
+  effects: Effect[];
+  reviveCharges: number;
+  color: string;
+};
+
+type RoomSnapshot = {
+  players: Map<string, PlayerSnapshot>;
+  foods: Map<string, Food>;
+};
+
+type PlayerMovementDelta = {
+  head: Position;
+  removedTail: number;
+};
+
+type PlayerDelta = {
+  id: string;
+  movement?: PlayerMovementDelta;
+  fullSnake?: Position[];
+  direction?: Player['direction'];
+  isAlive?: boolean;
+  score?: number;
+  effects?: Effect[];
+  reviveCharges?: number;
+  color?: string;
+};
+
+type FoodUpdate = Pick<Food, 'id' | 'x' | 'y' | 'spawnTime' | 'customLifetime' | 'isCorpse' | 'corpseColor'>;
+
+type StateDelta = {
+  tick: number;
+  players?: PlayerDelta[];
+  removedPlayers?: string[];
+  foods?: {
+    added?: Food[];
+    updated?: FoodUpdate[];
+    removed?: string[];
+  };
+};
+
+const DEFAULT_GRID_SIZE = 34;
+
 const rooms = new Map<string, Room>();
+
+let foodIdCounter = 0;
+function createFoodId(): string {
+    foodIdCounter += 1;
+    return `food-${foodIdCounter.toString(36)}`;
+}
+
+function clonePosition(position: Position): Position {
+    return { x: position.x, y: position.y };
+}
+
+function cloneSnake(snake: Position[]): Position[] {
+    return snake.map(clonePosition);
+}
+
+function cloneEffects(effects: Effect[]): Effect[] {
+    return effects.map(effect => ({ ...effect }));
+}
+
+function createPlayerSnapshot(player: Player): PlayerSnapshot {
+    return {
+        id: player.id,
+        snake: cloneSnake(player.snake),
+        direction: player.direction,
+        isAlive: player.isAlive,
+        score: player.score,
+        effects: cloneEffects(player.effects),
+        reviveCharges: player.reviveCharges,
+        color: player.color,
+    };
+}
+
+function cloneFood(food: Food): Food {
+    return {
+        id: food.id,
+        x: food.x,
+        y: food.y,
+        type: food.type,
+        spawnTime: food.spawnTime,
+        customLifetime: food.customLifetime,
+        isCorpse: food.isCorpse,
+        corpseColor: food.corpseColor,
+    };
+}
+
+function effectsEqual(a: Effect[], b: Effect[]): boolean {
+    if (a.length !== b.length) return false;
+    return a.every((effect, index) => {
+        const other = b[index];
+        if (!other) return false;
+        const keys = new Set([...Object.keys(effect), ...Object.keys(other)]);
+        for (const key of keys) {
+            if ((effect as Record<string, unknown>)[key] !== (other as Record<string, unknown>)[key]) {
+                return false;
+            }
+        }
+        return true;
+    });
+}
+
+function snakesEqual(a: Position[], b: Position[]): boolean {
+    if (a.length !== b.length) return false;
+    return a.every((segment, index) => {
+        const other = b[index];
+        return other && segment.x === other.x && segment.y === other.y;
+    });
+}
+
+function deriveMovement(previous: Position[] | undefined, current: Position[]): PlayerMovementDelta | undefined {
+    if (!previous || previous.length === 0 || current.length === 0) {
+        return undefined;
+    }
+
+    const currentBodyMatchesPrevious = current.slice(1).every((segment, index) => {
+        const prevSegment = previous[index];
+        return prevSegment && segment.x === prevSegment.x && segment.y === prevSegment.y;
+    });
+
+    if (!currentBodyMatchesPrevious) {
+        return undefined;
+    }
+
+    const head = clonePosition(current[0]);
+
+    if (previous[0].x === head.x && previous[0].y === head.y && snakesEqual(previous, current)) {
+        return undefined;
+    }
+
+    const desiredLength = current.length;
+    const removedTailCandidate = previous.length + 1 - desiredLength;
+    const removedTail = removedTailCandidate > 0 ? removedTailCandidate : 0;
+
+    return { head, removedTail };
+}
+
+function buildPlayerDelta(previous: PlayerSnapshot | undefined, current: Player): PlayerDelta | null {
+    const delta: PlayerDelta = { id: current.id };
+    let changed = false;
+
+    if (!previous) {
+        delta.fullSnake = cloneSnake(current.snake);
+        delta.direction = current.direction;
+        delta.isAlive = current.isAlive;
+        delta.score = current.score;
+        delta.effects = cloneEffects(current.effects);
+        delta.reviveCharges = current.reviveCharges;
+        delta.color = current.color;
+        return delta;
+    }
+
+    if (current.direction !== previous.direction) {
+        delta.direction = current.direction;
+        changed = true;
+    }
+
+    if (current.isAlive !== previous.isAlive) {
+        delta.isAlive = current.isAlive;
+        changed = true;
+    }
+
+    if (current.score !== previous.score) {
+        delta.score = current.score;
+        changed = true;
+    }
+
+    if (current.reviveCharges !== previous.reviveCharges) {
+        delta.reviveCharges = current.reviveCharges;
+        changed = true;
+    }
+
+    if (current.color !== previous.color) {
+        delta.color = current.color;
+        changed = true;
+    }
+
+    if (!effectsEqual(previous.effects, current.effects)) {
+        delta.effects = cloneEffects(current.effects);
+        changed = true;
+    }
+
+    const movement = deriveMovement(previous.snake, current.snake);
+    if (movement) {
+        delta.movement = movement;
+        changed = true;
+    } else if (!snakesEqual(previous.snake, current.snake)) {
+        delta.fullSnake = cloneSnake(current.snake);
+        changed = true;
+    }
+
+    return changed ? delta : null;
+}
+
+function foodChanged(previous: Food, current: Food): boolean {
+    return previous.x !== current.x ||
+        previous.y !== current.y ||
+        previous.spawnTime !== current.spawnTime ||
+        previous.customLifetime !== current.customLifetime ||
+        previous.isCorpse !== current.isCorpse ||
+        previous.corpseColor !== current.corpseColor;
+}
+
+function computeStateDelta(room: Room): StateDelta | null {
+    const playerDeltas: PlayerDelta[] = [];
+    const removedPlayers: string[] = [];
+
+    room.players.forEach(player => {
+        const previous = room.snapshot.players.get(player.id);
+        const delta = buildPlayerDelta(previous, player);
+        if (delta) {
+            playerDeltas.push(delta);
+        }
+    });
+
+    room.snapshot.players.forEach((_, playerId) => {
+        if (!room.players.has(playerId)) {
+            removedPlayers.push(playerId);
+        }
+    });
+
+    // Update player snapshots for the next tick.
+    room.snapshot.players.clear();
+    room.players.forEach(player => {
+        room.snapshot.players.set(player.id, createPlayerSnapshot(player));
+    });
+
+    const addedFoods: Food[] = [];
+    const updatedFoods: FoodUpdate[] = [];
+    const removedFoods: string[] = [];
+
+    room.foods.forEach(food => {
+        const previous = room.snapshot.foods.get(food.id);
+        if (!previous) {
+            addedFoods.push(cloneFood(food));
+        } else if (foodChanged(previous, food)) {
+            updatedFoods.push({
+                id: food.id,
+                x: food.x,
+                y: food.y,
+                spawnTime: food.spawnTime,
+                customLifetime: food.customLifetime,
+                isCorpse: food.isCorpse,
+                corpseColor: food.corpseColor,
+            });
+        }
+    });
+
+    room.snapshot.foods.forEach((_, foodId) => {
+        if (!room.foods.some(food => food.id === foodId)) {
+            removedFoods.push(foodId);
+        }
+    });
+
+    // Refresh food snapshots.
+    room.snapshot.foods.clear();
+    room.foods.forEach(food => {
+        room.snapshot.foods.set(food.id, cloneFood(food));
+    });
+
+    const hasPlayerChanges = playerDeltas.length > 0 || removedPlayers.length > 0;
+    const hasFoodChanges = addedFoods.length > 0 || updatedFoods.length > 0 || removedFoods.length > 0;
+
+    if (!hasPlayerChanges && !hasFoodChanges) {
+        return null;
+    }
+
+    room.stateVersion += 1;
+
+    const delta: StateDelta = { tick: room.stateVersion };
+    if (hasPlayerChanges) {
+        delta.players = playerDeltas;
+        if (removedPlayers.length > 0) {
+            delta.removedPlayers = removedPlayers;
+        }
+    }
+
+    if (hasFoodChanges) {
+        delta.foods = {};
+        if (addedFoods.length > 0) {
+            delta.foods.added = addedFoods;
+        }
+        if (updatedFoods.length > 0) {
+            delta.foods.updated = updatedFoods;
+        }
+        if (removedFoods.length > 0) {
+            delta.foods.removed = removedFoods;
+        }
+    }
+
+    return delta;
+}
 const GAME_SPEED = 250; // 稍微加快基础游戏速度
 const REVIVE_IMMUNITY_DURATION = 3000;
 const REVIVE_GHOST_DURATION = 3000;
@@ -133,6 +434,7 @@ function generateFood(currentFoods: Food[], allSnakes: Position[][], gridSize: n
     }
 
     return {
+        id: createFoodId(),
         ...newFoodPos,
         type: foodType,
         spawnTime: Date.now(),
@@ -455,6 +757,16 @@ function startGameLoop(roomId: string) {
 
         io.to(roomId).emit('playerDied', { playerId, killerId });
 
+        if (killer && player) {
+            io.to(roomId).emit('killAnnouncement', {
+                killerId,
+                killerName: killer.name,
+                victimId: playerId,
+                victimName: player.name,
+                timestamp: Date.now(),
+            });
+        }
+
         if (player.reviveCharges > 0) {
             player.reviveCharges -= 1;
             player.isAlive = true;
@@ -490,6 +802,7 @@ function startGameLoop(roomId: string) {
 
             player.isAlive = false;
             const bodyFood: Food[] = player.snake.map(segment => ({
+                id: createFoodId(),
                 ...segment,
                 type: FOOD_TYPES.NORMAL,
                 spawnTime: Date.now(),
@@ -541,11 +854,10 @@ function startGameLoop(roomId: string) {
             broadcastRoomList();
         }
 
-        io.to(roomId).emit('gameState', {
-            players: Array.from(room.players.values()),
-            foods: room.foods,
-            gridSize: room.gridSize,
-        });
+        const delta = computeStateDelta(room);
+        if (delta) {
+            io.to(roomId).emit('stateDelta', delta);
+        }
     }, GAME_SPEED);
 }
 
@@ -556,6 +868,7 @@ io.on('connection', (socket) => {
   socket.on('createRoom', ({ playerName, gridSize }) => {
     const roomId = generateUniqueRoomId(); // 6位数字房间号
     const playerId = socket.id;
+    const resolvedGridSize = typeof gridSize === 'number' && gridSize > 0 ? gridSize : DEFAULT_GRID_SIZE;
     const newPlayer: Player = {
       id: playerId,
       name: playerName,
@@ -577,9 +890,15 @@ io.on('connection', (socket) => {
       gameStarted: false,
       gameLoop: null,
       ownerId: playerId,
-      gridSize: gridSize || 17,
+      gridSize: resolvedGridSize,
       usedColors: new Set([0]), // First player uses color index 0
+      stateVersion: 0,
+      snapshot: {
+        players: new Map(),
+        foods: new Map(),
+      },
     };
+    room.snapshot.players.set(playerId, createPlayerSnapshot(newPlayer));
     rooms.set(roomId, room);
     socket.join(roomId);
     socket.emit('roomCreated', { roomId, playerId, isOwner: true });
@@ -608,6 +927,7 @@ io.on('connection', (socket) => {
       };
       room.players.set(playerId, newPlayer);
       room.usedColors.add(colorIndex);
+      room.snapshot.players.set(playerId, createPlayerSnapshot(newPlayer));
       socket.join(roomId);
       socket.emit('joinedRoom', { roomId, playerId, isOwner: false });
       io.to(roomId).emit('updatePlayers', Array.from(room.players.values()));
@@ -649,6 +969,15 @@ io.on('connection', (socket) => {
       });
       const allSnakes = Array.from(room.players.values()).map(p => p.snake);
       room.foods = [generateFood([], allSnakes, room.gridSize)];
+      room.stateVersion = 0;
+      room.snapshot.players.clear();
+      room.snapshot.foods.clear();
+      room.players.forEach(player => {
+        room.snapshot.players.set(player.id, createPlayerSnapshot(player));
+      });
+      room.foods.forEach(food => {
+        room.snapshot.foods.set(food.id, cloneFood(food));
+      });
       
       io.to(roomId).emit('gameStarted', { 
         players: Array.from(room.players.values()),
@@ -679,6 +1008,7 @@ io.on('connection', (socket) => {
     }
 
     room.players.delete(socket.id);
+    room.snapshot.players.delete(socket.id);
     socket.leave(roomId);
 
     if (room.players.size === 0) {
@@ -686,6 +1016,9 @@ io.on('connection', (socket) => {
         clearInterval(room.gameLoop);
         room.gameLoop = null;
       }
+      room.snapshot.players.clear();
+      room.snapshot.foods.clear();
+      room.stateVersion = 0;
       rooms.delete(roomId);
     } else {
       if (room.ownerId === socket.id) {
@@ -729,6 +1062,9 @@ io.on('connection', (socket) => {
             p.snake = [];
             p.reviveCharges = 0;
         });
+        room.stateVersion = 0;
+        room.snapshot.players.clear();
+        room.snapshot.foods.clear();
         io.to(roomId).emit('gameReset');
         io.to(roomId).emit('updatePlayers', Array.from(room.players.values()));
         broadcastRoomList();
@@ -749,8 +1085,12 @@ io.on('connection', (socket) => {
           }
         }
         room.players.delete(socket.id);
+        room.snapshot.players.delete(socket.id);
         if (room.players.size === 0) {
           if (room.gameLoop) clearInterval(room.gameLoop);
+          room.snapshot.players.clear();
+          room.snapshot.foods.clear();
+          room.stateVersion = 0;
           rooms.delete(roomId);
         } else {
           if (room.ownerId === socket.id) {

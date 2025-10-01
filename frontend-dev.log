@@ -1,0 +1,11 @@
+
+> snake@0.1.0 dev
+> next dev --turbopack
+
+   ▲ Next.js 15.5.3 (Turbopack)
+   - Local:        http://localhost:3002
+   - Network:      http://10.20.0.1:3002
+
+ ✓ Starting...
+ ✓ Ready in 8.6s
+[?25h
