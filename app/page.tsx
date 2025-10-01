@@ -1,5 +1,5 @@
-"use client";
-import { useState, useEffect, useCallback, useRef } from "react";
+﻿"use client";
+import { useState, useEffect, useCallback, useRef, CSSProperties } from "react";
 import { io, Socket } from "socket.io-client";
 
 let socket: Socket | null = null;
@@ -11,17 +11,17 @@ type Position = {
 
 // Mirroring server types
 const FOOD_TYPES = {
-    NORMAL: { id: 1, color: '#ff0000', score: 10, length: 1, lifetime: 15000, name: "普通食物", description: "增加体型并获得基础积分" },
-    FREEZE: { id: 2, color: '#00aaff', score: 20, effect: 'freeze', duration: 3000, lifetime: 8000, name: "冰冻果实", description: "束缚目标 3 秒，需提前规划走位" },
-    SPEED: { id: 3, color: '#ff5500', score: 30, effect: 'speed', duration: 5000, speedMultiplier: 2, lifetime: 8000, name: "加速辣椒", description: "5 秒疾速冲刺，追击或逃生首选" },
-    SHRINK: { id: 4, color: '#aa00ff', score: 20, effect: 'shrink', value: 3, lifetime: 8000, name: "缩小蘑菇", description: "瞬间瘦身 3 节，穿缝绕行更灵活" },
-    RAINBOW: { id: 5, color: 'rainbow', score: 50, effect: 'random', lifetime: 7000, name: "彩虹糖果", description: "随机触发增益或减益，考验手气的神秘糖" },
-    TELEPORT: { id: 6, color: 'linear-gradient(45deg, #00ffaa, #00aaff)', score: 20, effect: 'teleport', lifetime: 7000, name: "传送门", description: "瞬移至安全随机点，脱困反偷" },
-    REVIVE: { id: 7, color: '#ffd700', score: 60, effect: 'revive', lifetime: 12000, name: "复活甲", description: "死亡后原地满血复活并获得 3 秒无敌穿墙" },
-    GHOST: { id: 8, color: '#00ff00', score: 40, effect: 'ghost', duration: 6000, lifetime: 8000, name: "穿墙能力", description: "6 秒无视墙体，穿梭追击无压力" },
-    INVINCIBLE: { id: 9, color: '#ffffff', score: 50, effect: 'invincible', duration: 5000, lifetime: 8000, name: "无敌状态", description: "5 秒碰撞免疫，正面硬刚" },
-    MAGNET: { id: 10, color: '#ff00ff', score: 30, effect: 'magnet', duration: 8000, lifetime: 8000, name: "磁铁", description: "8 秒吸附周边食物，靠近即可收入囊中" }
-} as const;
+    NORMAL: { id: 1, color: '#ff0000', score: 10, length: 1, lifetime: 15000, name: "Normal Food", description: "Grow your snake and earn base points" },
+    FREEZE: { id: 2, color: '#00aaff', score: 20, effect: 'freeze', duration: 3000, lifetime: 8000, name: "Freeze Fruit", description: "Immobilise a target for 3 seconds; plan your moves ahead" },
+    SPEED: { id: 3, color: '#ff5500', score: 30, effect: 'speed', duration: 10000, speedMultiplier: 3, lifetime: 8000, name: "Turbo Pepper", description: "10 seconds of triple-speed sprint to chase or escape" },
+    SHRINK: { id: 4, color: '#aa00ff', score: 20, effect: 'shrink', value: 3, lifetime: 8000, name: "Shrink Mushroom", description: "Instantly drop 3 segments to squeeze through tight gaps" },
+    RAINBOW: { id: 5, color: 'rainbow', score: 50, effect: 'random', lifetime: 7000, name: "Rainbow Candy", description: "Random buff or debuff – test your luck" },
+    TELEPORT: { id: 6, color: 'linear-gradient(45deg, #00ffaa, #00aaff)', score: 20, effect: 'teleport', lifetime: 7000, name: "Portal", description: "Blink to a safe random tile to escape or ambush" },
+    REVIVE: { id: 7, color: '#ffd700', score: 60, effect: 'revive', lifetime: 12000, name: "Revive Charm", description: "Respawn on the spot with a brief shield" },
+    GHOST: { id: 8, color: '#00ff00', score: 40, effect: 'ghost', duration: 6000, lifetime: 8000, name: "Ghost Ability", description: "Phase through walls for 6 seconds to reposition" },
+    INVINCIBLE: { id: 9, color: '#ffffff', score: 50, effect: 'invincible', duration: 5000, lifetime: 8000, name: "Invincibility", description: "5 seconds of collision immunity" },
+    MAGNET: { id: 10, color: '#ff00ff', score: 30, effect: 'magnet', duration: 8000, lifetime: 8000, name: "Magnet", description: "Pull nearby food towards you for 8 seconds" }
+} as const; 
 
 const MAGIC_CHIME = "https://actions.google.com/sounds/v1/cartoon/magic_chime.ogg";
 
@@ -64,15 +64,15 @@ type Effect = {
 };
 
 const EFFECT_LABELS: Record<Effect['type'], string> = {
-    freeze: "冰冻",
-    speed: "加速",
-    ghost: "穿墙",
-    invincible: "无敌",
-    magnet: "磁铁",
-    shrink: "缩小",
-    grow: "变长",
-    teleport: "传送",
-    revive: "复活甲",
+    freeze: "Freeze",
+    speed: "Speed Boost",
+    ghost: "Ghost",
+    invincible: "Invincible",
+    magnet: "Magnet",
+    shrink: "Shrink",
+    grow: "Grow",
+    teleport: "Teleport",
+    revive: "Revive",
 };
 
 type Food = Position & {
@@ -148,6 +148,19 @@ const cloneFoodState = (food: Food): Food => ({
   ...food,
 });
 
+const dedupeSnake = (snake: Position[]): Position[] => {
+  if (snake.length <= 1) return snake;
+  const deduped: Position[] = [];
+  let last: Position | null = null;
+  for (const segment of snake) {
+    if (!last || last.x !== segment.x || last.y !== segment.y) {
+      deduped.push(segment);
+      last = segment;
+    }
+  }
+  return deduped;
+};
+
 type RoomSummary = {
   roomId: string;
   playerCount: number;
@@ -177,6 +190,10 @@ export default function SnakeGame() {
   const [gameOver, setGameOver] = useState(false);
   const [winner, setWinner] = useState<Player | null>(null);
   const [killFeed, setKillFeed] = useState<KillEvent[]>([]);
+  const [viewport, setViewport] = useState(() => ({
+    width: typeof window === 'undefined' ? 1024 : window.innerWidth,
+    height: typeof window === 'undefined' ? 768 : window.innerHeight,
+  }));
   
   // Canvas ref
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -199,25 +216,37 @@ export default function SnakeGame() {
     if (typeof window === 'undefined') return;
 
     const computeCellSize = () => {
-      const hasRoomForSidebar = window.innerWidth > 900;
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const hasRoomForSidebar = viewportWidth > 900;
       const sidebarAllowance = hasRoomForSidebar ? 340 : 0;
-      const paddingAllowance = hasRoomForSidebar ? 120 : 60;
-      const rawAvailable = window.innerWidth - sidebarAllowance - paddingAllowance;
-      const availableWidth = Math.max(320, Math.min(rawAvailable, 1024));
-
-      const baseCandidate = Math.floor(availableWidth / BASE_GRID_SIZE);
-      const clampedBase = Math.min(MAX_CELL_SIZE, Math.max(MIN_CELL_SIZE, baseCandidate));
+      const paddingAllowance = hasRoomForSidebar ? 120 : 24;
+      const rawWidth = viewportWidth - sidebarAllowance - paddingAllowance;
+      const widthBudget = hasRoomForSidebar ? Math.max(320, rawWidth) : Math.max(240, viewportWidth - 16);
 
       const safeGridSize = gridSize > 0 ? gridSize : DEFAULT_GRID_SIZE;
+      const baseWidthCandidate = Math.floor(widthBudget / BASE_GRID_SIZE);
+
+      const headerAllowance = hasRoomForSidebar ? 220 : 140;
+      const availableHeight = Math.max(240, viewportHeight - headerAllowance);
+      const heightCandidate = Math.floor(availableHeight / safeGridSize);
+
+      const candidate = heightCandidate > 0 ? Math.min(baseWidthCandidate, heightCandidate) : baseWidthCandidate;
+      const clampedBase = Math.min(MAX_CELL_SIZE, Math.max(MIN_CELL_SIZE, candidate));
       const scale = BASE_GRID_SIZE / safeGridSize;
       const scaled = Math.max(MIN_CELL_SIZE, Math.floor(clampedBase * scale));
 
       setCellSize(scaled);
+      setViewport({ width: viewportWidth, height: viewportHeight });
     };
 
     computeCellSize();
     window.addEventListener('resize', computeCellSize);
-    return () => window.removeEventListener('resize', computeCellSize);
+    window.addEventListener('orientationchange', computeCellSize);
+    return () => {
+      window.removeEventListener('resize', computeCellSize);
+      window.removeEventListener('orientationchange', computeCellSize);
+    };
   }, [gridSize]);
 
   useEffect(() => {
@@ -228,7 +257,24 @@ export default function SnakeGame() {
   const currentPlayer = players.find(p => p.id === playerId);
   const canNavigateBack = multiplayerMode || roomId || gameStarted;
   const canvasPixelSize = gridSize * cellSize + 40;
-  const canvasMaxWidth = Math.min(canvasPixelSize, 820);
+  const isMobileLayout = viewport.width <= 900;
+  const mobileCap = Math.max(240, Math.min(canvasPixelSize, Math.min(viewport.width, viewport.height) - 16));
+  const desktopCap = Math.min(canvasPixelSize, 820);
+  const canvasDisplaySize = isMobileLayout ? mobileCap : desktopCap;
+  const canvasStyle: CSSProperties = isMobileLayout
+    ? {
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        width: `${canvasDisplaySize}px`,
+        height: `${canvasDisplaySize}px`,
+        maxWidth: `${canvasDisplaySize}px`,
+        maxHeight: `${canvasDisplaySize}px`,
+      }
+    : {
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        width: '100%',
+        maxWidth: `${canvasDisplaySize}px`,
+        height: 'auto',
+      };
 
   const foodAudioRefs = useRef<Record<number, HTMLAudioElement>>({});
   const winSoundRef = useRef<HTMLAudioElement>(null);
@@ -248,11 +294,11 @@ export default function SnakeGame() {
       const playback = audio.play();
       if (playback && typeof playback.catch === 'function') {
         playback.catch(err => {
-          console.warn("音效播放失败", err);
+          console.warn("sound playback failed", err);
         });
       }
     } catch (err) {
-      console.warn("音效播放失败", err);
+      console.warn("sound playback failed", err);
     }
   }, []);
 
@@ -305,12 +351,12 @@ export default function SnakeGame() {
             audio.currentTime = 0;
             audio.muted = false;
           }).catch((err) => {
-            console.warn('音频预加载失败', err);
+            console.warn('audio preload failed', err);
             audio.muted = false;
           });
         }
       } catch (error) {
-        console.warn('音频预加载失败', error);
+        console.warn('audio preload failed', error);
         audio.muted = false;
       }
     });
@@ -362,11 +408,19 @@ export default function SnakeGame() {
       if (playerDelta.fullSnake) {
         nextPlayer.snake = cloneSnake(playerDelta.fullSnake);
       } else if (playerDelta.movement) {
-        const newSnake = [clonePosition(playerDelta.movement.head), ...nextPlayer.snake.map(clonePosition)];
-        for (let i = 0; i < playerDelta.movement.removedTail && newSnake.length > 0; i += 1) {
+        const baseSnake = nextPlayer.snake.map(clonePosition);
+        if (baseSnake.length > 0) {
+          const nextHead = baseSnake[0];
+          if (nextHead.x === playerDelta.movement.head.x && nextHead.y === playerDelta.movement.head.y) {
+            baseSnake.shift();
+          }
+        }
+        const newSnake = [clonePosition(playerDelta.movement.head), ...baseSnake];
+        const trims = Math.min(playerDelta.movement.removedTail, newSnake.length > 1 ? newSnake.length - 1 : 0);
+        for (let i = 0; i < trims; i += 1) {
           newSnake.pop();
         }
-        nextPlayer.snake = newSnake;
+        nextPlayer.snake = dedupeSnake(newSnake);
       }
 
       if (playerDelta.direction) {
@@ -493,7 +547,7 @@ export default function SnakeGame() {
     socket = io(socketUrl);
 
     socket.on("connect", () => {
-      console.log(`已连接到服务器: ${socketUrl}`);
+      console.log(`Connected to server: ${socketUrl}`);
       unlockAudio();
     });
     const handleFoodConsumed = ({ playerId: eaterId, foodTypeId }: { playerId: string; foodTypeId: number }) => {
@@ -591,7 +645,7 @@ export default function SnakeGame() {
       socket?.emit('requestRoomList');
     });
     socket.on('error', (message) => {
-      const text = typeof message === 'string' ? message : '发生错误';
+      const text = typeof message === 'string' ? message : 'An error occurred';
       setRoomError(text);
     });
     socket.on('foodConsumed', handleFoodConsumed);
@@ -653,7 +707,7 @@ export default function SnakeGame() {
   }, [clearKillFeed]);
 
   const startSinglePlayer = () => {
-    // 跳转到单人模式页面
+    // Redirect to single-player page
     unlockAudio();
     window.location.href = `/single-player.html?playerName=${encodeURIComponent(playerName)}`;
   };
@@ -699,7 +753,7 @@ export default function SnakeGame() {
 
   const createRoom = () => {
     if (!playerName.trim()) {
-      setRoomError('请输入昵称后再创建房间');
+      setRoomError('Please enter a nickname before creating a room');
       return;
     }
     setRoomError('');
@@ -709,7 +763,7 @@ export default function SnakeGame() {
   const joinRoomFromList = useCallback((targetRoomId: string, isJoinable: boolean) => {
     if (!isJoinable) return;
     if (!playerName.trim()) {
-      setRoomError('请输入昵称后再加入房间');
+      setRoomError('Please enter a nickname before joining a room');
       return;
     }
     setRoomError('');
@@ -1067,7 +1121,7 @@ export default function SnakeGame() {
         tabIndex={0}
         aria-expanded={open}
       >
-        <h2>玩家列表</h2>
+        <h2>Players</h2>
         <span className="panel-toggle-indicator">{open ? '-' : '+'}</span>
       </div>
       {open && (
@@ -1075,11 +1129,11 @@ export default function SnakeGame() {
           {players.map((player) => (
             <div key={player.id} className={`player ${player.isAlive ? 'player-alive' : 'player-dead'}`}>
               <div className="player-color" style={{ backgroundColor: player.color.replace('bg-', '').replace('-500', '') }}></div>
-              <span>{player.name}{player.id === currentPlayerId && ' (你)'}</span>
-              <span style={{ marginLeft: 'auto' }}>分数: {player.score}</span>
-              <span style={{ marginLeft: '12px' }}>复活甲: {player.reviveCharges ?? 0}</span>
-               {!player.isAlive && gameStarted && ' ☠️'}
-               {!gameStarted && (player.isReady ? ' ✅' : ' ❌')}
+              <span>{player.name}{player.id === currentPlayerId && ' (you)'}</span>
+              <span style={{ marginLeft: 'auto' }}>Score: {player.score}</span>
+              <span style={{ marginLeft: '12px' }}>Revives: {player.reviveCharges ?? 0}</span>
+               {!player.isAlive && gameStarted && ' [Eliminated]'}
+               {!gameStarted && (player.isReady ? ' ✅' : ' ⏳')}
             </div>
           ))}
         </div>
@@ -1089,14 +1143,14 @@ export default function SnakeGame() {
 
   const EffectsPanel = ({ effects }: { effects: Effect[] }) => (
     <div className="effects-panel">
-        <h2>当前效果</h2>
+        <h2>Active Effects</h2>
         <div id="current-effects">
             {effects.length > 0 ? effects.map((effect, index) => {
                 const effectLabel = EFFECT_LABELS[effect.type] ?? effect.type;
                 return (
-                    <div key={index}>{effectLabel} - {Math.ceil(effect.duration / 1000)}秒</div>
+                    <div key={index}>{effectLabel} - {Math.ceil(effect.duration / 1000)}s</div>
                 );
-            }) : '无'}
+            }) : 'None'}
         </div>
     </div>
   );
@@ -1116,7 +1170,7 @@ export default function SnakeGame() {
             tabIndex={0}
             aria-expanded={open}
           >
-            <h2>食物类型</h2>
+            <h2>Food Types</h2>
             <span className="panel-toggle-indicator">{open ? '-' : '+'}</span>
           </div>
           {open && (
@@ -1253,7 +1307,7 @@ export default function SnakeGame() {
           {killFeed.map((event) => (
             <div key={event.id} className="kill-feed-item">
               <span className="kill-feed-killer">{event.killerName}</span>
-              <span className="kill-feed-verb"> 终结了 </span>
+              <span className="kill-feed-verb"> defeated </span>
               <span className="kill-feed-victim">{event.victimName}</span>
             </div>
           ))}
@@ -1273,21 +1327,21 @@ export default function SnakeGame() {
       />
       <header>
         <div className="header-bar">
-          <h1>贪吃蛇大作战</h1>
+          <h1>Multiplayer Snake Arena</h1>
           <div className="header-actions">
             {canNavigateBack && (
               <button onClick={navigateBackToMenu}>
-                返回上一页
+                Back
               </button>
             )}
             {roomId && (
               <button onClick={leaveRoom}>
-                退出房间
+                Leave Room
               </button>
             )}
           </div>
         </div>
-        {roomId && <div className="status">房间号: {roomId}</div>}
+        {roomId && <div className="status">Room ID: {roomId}</div>}
       </header>
       
       {!multiplayerMode && !gameStarted ? (
@@ -1297,16 +1351,16 @@ export default function SnakeGame() {
               type="text"
               value={playerName}
               onChange={(e) => setPlayerName(e.target.value)}
-              placeholder="输入你的名字"
+              placeholder="Enter your nickname"
               className="px-4 py-2 border rounded"
             />
             <div className="flex gap-4">
               <button onClick={startSinglePlayer} disabled={!playerName.trim()}>
-                单人模式
+                Single Player
               </button>
-              <button onClick={() => setMultiplayerMode(true)} disabled={!playerName.trim()}>
-                多人模式
-              </button>
+            <button onClick={() => setMultiplayerMode(true)} disabled={!playerName.trim()}>
+                Multiplayer
+            </button>
             </div>
           </div>
         </div>
@@ -1314,19 +1368,19 @@ export default function SnakeGame() {
         <div className="flex flex-col gap-4 items-center w-full">
           <div className="flex gap-4">
             <button onClick={createRoom} disabled={!playerName.trim()}>
-              创建房间
+              Create Room
             </button>
             <button onClick={navigateBackToMenu}>
-              返回
+              Back
             </button>
           </div>
           {!playerName.trim() && (
-            <div className="hint-text">请输入昵称后才能加入房间</div>
+            <div className="hint-text">Enter a nickname before joining a room</div>
           )}
           {roomError && <div className="error-text">{roomError}</div>}
           <div className="room-list">
             {roomsSummary.length === 0 ? (
-              <div className="room-empty">暂无房间，快来创建第一个吧！</div>
+              <div className="room-empty">No rooms yet—create the first one!</div>
             ) : (
               roomsSummary.map((summary) => {
                 const disabled = !summary.isJoinable || !playerName.trim();
@@ -1337,7 +1391,7 @@ export default function SnakeGame() {
                     onClick={() => joinRoomFromList(summary.roomId, summary.isJoinable)}
                     disabled={disabled}
                   >
-                    <span>房间 {summary.roomId}</span>
+                    <span>Room {summary.roomId}</span>
                     <span>{summary.playerCount}/{summary.capacity}</span>
                   </button>
                 );
@@ -1346,10 +1400,9 @@ export default function SnakeGame() {
           </div>
         </div>
       ) : gameStarted && !multiplayerMode ? (
-        // 不再显示React的单人模式，直接跳转到单人页面
         <div className="text-center">
-          <p>正在加载单人模式游戏...</p>
-          <p>如果页面没有自动跳转，请<a href="/single-player.html" className="text-blue-500 underline">点击这里</a></p>
+          <p>Loading single-player mode...</p>
+          <p><p>If the page does not redirect automatically, please <a href="/single-player.html" className="text-blue-500 underline">click here</a></p></p>
         </div>
       ) : (
         // Multiplayer Room View
@@ -1358,9 +1411,13 @@ export default function SnakeGame() {
               <div className="relative">
                 {gameOver && (
                     <div className="absolute inset-0 bg-black bg-opacity-50 flex flex-col items-center justify-center z-10">
-                        <div className="text-white text-3xl font-bold">游戏结束!</div>
-                        {winner && <div className="text-yellow-400 text-2xl mt-2">获胜者是 {winner.name}</div>}
-                        {isOwner && <button onClick={resetGame} className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">再玩一局</button>}
+                        <div className="text-white text-3xl font-bold">Game Over!</div>
+                        {winner && <div className="text-yellow-400 text-2xl mt-2">Winner: {winner.name}</div>}
+                        {isOwner && (
+                          <button onClick={resetGame} className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+                            Play Again
+                          </button>
+                        )}
                     </div>
                 )}
                 <canvas
@@ -1369,21 +1426,16 @@ export default function SnakeGame() {
                   width={canvasPixelSize}
                   height={canvasPixelSize}
                   className="border border-white rounded"
-                  style={{
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    width: '100%',
-                    maxWidth: `${canvasMaxWidth}px`,
-                    height: 'auto'
-                  }}
+                  style={canvasStyle}
                 />
                 {!gameStarted && !gameOver && (
                   <div className="canvas-controls">
                     <button onClick={readyUp}>
-                      {players.find(p => p.id === playerId)?.isReady ? '取消准备' : '准备'}
+                      {players.find(p => p.id === playerId)?.isReady ? 'Unready' : 'Ready'}
                     </button>
                     {isOwner && (
                       <button onClick={startGame} disabled={!players.every(p => p.isReady)}>
-                        开始游戏
+                        Start Game
                       </button>
                     )}
                   </div>
@@ -1419,3 +1471,18 @@ export default function SnakeGame() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

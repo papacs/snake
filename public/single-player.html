@@ -364,9 +364,40 @@
             .top-bar {
                 flex-direction: column;
                 align-items: stretch;
-            }
         }
-    </style>
+    }
+
+    @media (max-width: 900px) {
+        body {
+            padding: 12px;
+        }
+        .container {
+            width: 100vw;
+            min-height: 100vh;
+            padding: 0;
+        }
+        .game-area {
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+        }
+        .canvas-wrapper {
+            width: 100%;
+            min-width: 0;
+            flex: 0 0 auto;
+            justify-content: center;
+        }
+        #game-board {
+            width: 100vw;
+            max-width: min(100vw, 100vh);
+            height: auto;
+        }
+        .sidebar {
+            width: 100%;
+            min-width: 0;
+        }
+    }
+</style>
 </head>
 <body>
     <div id="touch-overlay"></div>
