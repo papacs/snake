@@ -472,7 +472,7 @@ export default function SnakeGame() {
     if (existingTimeout) {
       clearTimeout(existingTimeout);
     }
-    const timeoutId = window.setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       setKillFeed(prev => prev.filter(event => event.id !== id));
       killTimeoutsRef.current.delete(id);
     }, 4000);
@@ -538,15 +538,17 @@ export default function SnakeGame() {
       if (initialGameState.gridSize) setGridSize(initialGameState.gridSize);
 
       if (Array.isArray(initialGameState.players)) {
-        setPlayers(initialGameState.players);
-        playersRef.current = new Map(initialGameState.players.map(player => [player.id, clonePlayerState(player)]));
+        const typedPlayers = initialGameState.players as Player[];
+        setPlayers(typedPlayers);
+        playersRef.current = new Map(typedPlayers.map((player) => [player.id, clonePlayerState(player)]));
       } else {
         playersRef.current.clear();
       }
 
       if (Array.isArray(initialGameState.foods)) {
-        setFoods(initialGameState.foods);
-        foodsRef.current = new Map(initialGameState.foods.map(food => [food.id, cloneFoodState(food)]));
+        const typedFoods = initialGameState.foods as Food[];
+        setFoods(typedFoods);
+        foodsRef.current = new Map(typedFoods.map((food) => [food.id, cloneFoodState(food)]));
       } else {
         foodsRef.current.clear();
         setFoods([]);
