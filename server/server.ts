@@ -494,6 +494,27 @@ function getColorIndexFromColor(color: string): number {
   return colors.indexOf(color);
 }
 
+function recalculatePlayerSpeed(player: Player) {
+    let speedMultiplier = 1;
+    const speedEffects = player.effects.filter(e => e.type === 'speed');
+    if (speedEffects.length > 0) {
+        speedMultiplier = Math.max(...speedEffects.map(e => (e.speedMultiplier as number) || 1));
+    }
+    player.speed = 1 / speedMultiplier;
+}
+
+function activateDash(player: Player, room: Room, roomId: string) {
+    const dashEffectIndex = player.effects.findIndex(e => (e as any).isDash);
+    if (dashEffectIndex > -1) {
+        player.effects.splice(dashEffectIndex, 1);
+    }
+
+    player.effects.push({ type: 'speed', duration: DASH_DURATION_MS, speedMultiplier: DASH_SPEED_MULTIPLIER, isDash: true } as Effect);
+    recalculatePlayerSpeed(player);
+    player.dashAvailableAt = Date.now() + DASH_COOLDOWN_MS;
+    io.to(roomId).emit('effectTriggered', { playerId: player.id, effects: ['dash'] });
+}
+
 function applyFoodEffect(
     player: Player,
     foodType: typeof FOOD_TYPES[keyof typeof FOOD_TYPES],
@@ -670,6 +691,8 @@ function startGameLoop(roomId: string) {
         const nextPositions: { [id: string]: { head: Position, newSnake: Position[] } } = {};
         const playersToKill = new Map<string, { killerId?: string }>();
 
+        const movingPlayers = players.filter(p => p.isAlive);
+
             const markPlayerForDeath = (playerId: string, killerId?: string) => {
                 const existing = playersToKill.get(playerId);
                 if (existing?.killerId) return;
@@ -813,7 +836,7 @@ function startGameLoop(roomId: string) {
 
             movingPlayers.forEach(player => {
                 if (!player.isAlive) return;
-                const nextPosition = nextPositions.get(player.id);
+                const nextPosition = nextPositions[player.id];
                 if (!nextPosition) return;
 
                 const { head, newSnake } = nextPosition;
@@ -833,7 +856,6 @@ function startGameLoop(roomId: string) {
 
                 player.snake = newSnake;
             });
-        }
 
         // 8. Check for game over: The game ends when no players are alive.
         const alivePlayers = players.filter(p => p.isAlive);
@@ -843,7 +865,7 @@ function startGameLoop(roomId: string) {
             room.gameStarted = false;
             
             // The winner is the player with the highest score.
-            const winner = [...currentPlayers].sort((a, b) => b.score - a.score)[0];
+            const winner = [...players].sort((a, b) => b.score - a.score)[0];
             io.to(roomId).emit('gameOver', winner);
             broadcastRoomList();
         }
@@ -876,6 +898,8 @@ io.on('connection', (socket) => {
       effects: [],
       speed: 1,
       reviveCharges: 0,
+      dashAvailableAt: 0,
+      lastDashInputAt: 0,
     };
     const room: Room = {
       id: roomId,
@@ -918,6 +942,8 @@ io.on('connection', (socket) => {
       effects: [],
       speed: 1,
       reviveCharges: 0,
+      dashAvailableAt: 0,
+      lastDashInputAt: 0,
       };
       room.players.set(playerId, newPlayer);
       room.usedColors.add(colorIndex);
@@ -1129,5 +1155,3 @@ const port = process.env.PORT || 3001;
 httpServer.listen(port, () => {
   console.log(`Socket.IO server running on http://localhost:${port}`);
 });
-
-
