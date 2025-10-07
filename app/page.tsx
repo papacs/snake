@@ -13,10 +13,10 @@ type Position = {
 const FOOD_TYPES = {
     NORMAL: { id: 1, color: '#ff0000', score: 10, length: 1, lifetime: 15000, name: "普通食物", description: "增加体型并获得基础积分" },
     FREEZE: { id: 2, color: '#00aaff', score: 20, effect: 'freeze', duration: 3000, lifetime: 8000, name: "冰冻果实", description: "束缚目标 3 秒，需提前规划走位" },
-    SPEED: { id: 3, color: '#ff5500', score: 30, effect: 'speed', duration: 5000, speedMultiplier: 2, lifetime: 8000, name: "加速辣椒", description: "5 秒疾速冲刺，追击或逃生首选" },
+    SPEED: { id: 3, color: '#ff5500', score: 30, effect: 'speed', duration: 5000, speedMultiplier: 3, lifetime: 8000, name: "加速辣椒", description: "5 秒疾速冲刺，追击或逃生首选" },
     SHRINK: { id: 4, color: '#aa00ff', score: 20, effect: 'shrink', value: 3, lifetime: 8000, name: "缩小蘑菇", description: "瞬间瘦身 3 节，穿缝绕行更灵活" },
-    RAINBOW: { id: 5, color: 'rainbow', score: 50, effect: 'random', lifetime: 7000, name: "彩虹糖果", description: "随机触发增益或减益，考验手气的神秘糖" },
-    TELEPORT: { id: 6, color: 'linear-gradient(45deg, #00ffaa, #00aaff)', score: 20, effect: 'teleport', lifetime: 7000, name: "传送门", description: "瞬移至安全随机点，脱困反偷" },
+    RAINBOW: { id: 5, color: 'rainbow', score: 50, effect: 'random', lifetime: 7000, name: "彩虹糖果", description: "随机触发增益或减益，考验手气" },
+    INVISIBLE: { id: 6, color: 'linear-gradient(45deg, #00ffaa, #00aaff)', score: 20, effect: 'invisible', duration: 5000, lifetime: 7000, name: "隐身水", description: "5 秒隐身，其他玩家无法看到你" },
     REVIVE: { id: 7, color: '#ffd700', score: 60, effect: 'revive', lifetime: 12000, name: "复活甲", description: "死亡后原地满血复活并获得 3 秒无敌穿墙" },
     GHOST: { id: 8, color: '#00ff00', score: 40, effect: 'ghost', duration: 6000, lifetime: 8000, name: "穿墙能力", description: "6 秒无视墙体，穿梭追击无压力" },
     INVINCIBLE: { id: 9, color: '#ffffff', score: 50, effect: 'invincible', duration: 5000, lifetime: 8000, name: "无敌状态", description: "5 秒碰撞免疫，正面硬刚" },
@@ -50,15 +50,17 @@ const EFFECT_SOUNDS: Record<string, string> = {
   invincible: "https://actions.google.com/sounds/v1/cartoon/siren_whistle.ogg",
   magnet: "https://actions.google.com/sounds/v1/cartoon/suction_pop.ogg",
   revive: "https://actions.google.com/sounds/v1/cartoon/fairy_dust_gliss.ogg",
-  teleport: "https://actions.google.com/sounds/v1/cartoon/ascending_whistle.ogg",
+  invisible: "https://actions.google.com/sounds/v1/cartoon/ascending_whistle.ogg",
   death: "https://actions.google.com/sounds/v1/cartoon/anvil_fall_and_hit.ogg",
 };
+
+const DASH_TAP_WINDOW_MS = 300;
 
 const WIN_SOUND_SRC = "https://actions.google.com/sounds/v1/cartoon/ta_da.ogg";
 const LOSE_SOUND_SRC = "https://actions.google.com/sounds/v1/cartoon/sad_trombone.ogg";
 
 type Effect = {
-    type: 'freeze' | 'speed' | 'ghost' | 'invincible' | 'magnet' | 'shrink' | 'grow' | 'teleport' | 'revive';
+    type: 'freeze' | 'speed' | 'ghost' | 'invincible' | 'magnet' | 'shrink' | 'grow' | 'invisible' | 'revive';
     duration: number;
     [key: string]: unknown; 
 };
@@ -71,70 +73,11 @@ const EFFECT_LABELS: Record<Effect['type'], string> = {
     magnet: "磁铁",
     shrink: "缩小",
     grow: "变长",
-    teleport: "传送",
+    invisible: "隐身",
     revive: "复活甲",
 };
 
-type Food = Position & {
-    id: string;
-    type: typeof FOOD_TYPES[keyof typeof FOOD_TYPES];
-    spawnTime: number;
-    customLifetime?: number;
-    isCorpse?: boolean;
-    corpseColor?: string;
-};
 
-type Player = {
-  id: string;
-  name: string;
-  isReady: boolean;
-  snake: Position[];
-  direction: "UP" | "DOWN" | "LEFT" | "RIGHT";
-  color: string;
-  isAlive: boolean;
-  score: number;
-  effects: Effect[];
-  reviveCharges: number;
-};
-
-type PlayerMovementDelta = {
-  head: Position;
-  removedTail: number;
-};
-
-type PlayerDelta = {
-  id: string;
-  movement?: PlayerMovementDelta;
-  fullSnake?: Position[];
-  direction?: Player['direction'];
-  isAlive?: boolean;
-  score?: number;
-  effects?: Effect[];
-  reviveCharges?: number;
-  color?: string;
-};
-
-type FoodUpdate = Pick<Food, 'id' | 'x' | 'y' | 'spawnTime' | 'customLifetime' | 'isCorpse' | 'corpseColor'>;
-
-type StateDelta = {
-  tick: number;
-  players?: PlayerDelta[];
-  removedPlayers?: string[];
-  foods?: {
-    added?: Food[];
-    updated?: FoodUpdate[];
-    removed?: string[];
-  };
-};
-
-type KillEvent = {
-  id: string;
-  killerId: string;
-  killerName: string;
-  victimId: string;
-  victimName: string;
-  timestamp: number;
-};
 
 const clonePosition = (position: Position): Position => ({ x: position.x, y: position.y });
 const cloneSnake = (snake: Position[]): Position[] => snake.map(clonePosition);
@@ -177,6 +120,7 @@ export default function SnakeGame() {
   const [gameOver, setGameOver] = useState(false);
   const [winner, setWinner] = useState<Player | null>(null);
   const [killFeed, setKillFeed] = useState<KillEvent[]>([]);
+  const [now, setNow] = useState(Date.now());
   
   // Canvas ref
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -226,6 +170,8 @@ export default function SnakeGame() {
 
   // Current player
   const currentPlayer = players.find(p => p.id === playerId);
+  const dashCooldownRemaining = Math.max(0, (currentPlayer?.dashCooldownEnd ?? 0) - now);
+  const canDash = Boolean(currentPlayer && currentPlayer.isAlive && dashCooldownRemaining <= 0);
   const canNavigateBack = multiplayerMode || roomId || gameStarted;
   const canvasPixelSize = gridSize * cellSize + 40;
   const canvasMaxWidth = Math.min(canvasPixelSize, 820);
@@ -236,10 +182,30 @@ export default function SnakeGame() {
   const effectAudioRefs = useRef<Record<string, HTMLAudioElement>>({});
   const playerIdRef = useRef<string>("");
   const audioUnlockedRef = useRef(false);
+  const dashTapRef = useRef<{ direction: Player['direction'] | null; count: number; lastTime: number }>({ direction: null, count: 0, lastTime: 0 });
 
   useEffect(() => {
     playerIdRef.current = playerId;
   }, [playerId]);
+
+  useEffect(() => {
+    if (!gameStarted) {
+      setNow(Date.now());
+      return;
+    }
+    const interval = setInterval(() => setNow(Date.now()), 200);
+    return () => clearInterval(interval);
+  }, [gameStarted]);
+
+  useEffect(() => {
+    dashTapRef.current = { direction: null, count: 0, lastTime: 0 };
+  }, [roomId]);
+
+  useEffect(() => {
+    if (!gameStarted) {
+      dashTapRef.current = { direction: null, count: 0, lastTime: 0 };
+    }
+  }, [gameStarted]);
 
   const playAudio = useCallback((audio?: HTMLAudioElement | null) => {
     if (!audio) return;
@@ -350,6 +316,7 @@ export default function SnakeGame() {
             isAlive: playerDelta.isAlive ?? true,
             score: playerDelta.score ?? 0,
             effects: playerDelta.effects ? cloneEffects(playerDelta.effects) : [],
+            dashCooldownEnd: playerDelta.dashCooldownEnd ?? 0,
             reviveCharges: playerDelta.reviveCharges ?? 0,
           };
           playersMap.set(playerDelta.id, fallback);
@@ -390,6 +357,10 @@ export default function SnakeGame() {
 
       if (playerDelta.reviveCharges !== undefined) {
         nextPlayer.reviveCharges = playerDelta.reviveCharges;
+      }
+
+      if (playerDelta.dashCooldownEnd !== undefined) {
+        nextPlayer.dashCooldownEnd = playerDelta.dashCooldownEnd;
       }
 
       if (playerDelta.color) {
@@ -681,6 +652,7 @@ export default function SnakeGame() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       unlockAudio();
+      if (e.repeat) return;
       let newDirection: "UP" | "DOWN" | "LEFT" | "RIGHT" | null = null;
       switch (e.key) {
         case "ArrowUp": newDirection = "UP"; break;
@@ -689,13 +661,37 @@ export default function SnakeGame() {
         case "ArrowRight": newDirection = "RIGHT"; break;
       }
       if (newDirection) {
+        const tapState = dashTapRef.current;
+        const nowTs = Date.now();
+
+        if (currentPlayer && currentPlayer.direction === newDirection) {
+          if (tapState.direction === newDirection && nowTs - tapState.lastTime <= DASH_TAP_WINDOW_MS) {
+            tapState.count += 1;
+          } else {
+            tapState.direction = newDirection;
+            tapState.count = 1;
+          }
+          tapState.lastTime = nowTs;
+
+          if (tapState.count >= 2) {
+            tapState.count = 0;
+            if (canDash && multiplayerMode && socket && roomId) {
+              socket.emit('requestDash', { roomId });
+            }
+          }
+        } else {
+          tapState.direction = newDirection;
+          tapState.count = 1;
+          tapState.lastTime = nowTs;
+        }
+
         changeDirection(newDirection);
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [roomId, multiplayerMode, changeDirection, unlockAudio]);
+  }, [roomId, multiplayerMode, changeDirection, unlockAudio, canDash, currentPlayer]);
 
   const createRoom = () => {
     if (!playerName.trim()) {
@@ -739,6 +735,8 @@ export default function SnakeGame() {
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+
+    const currentPlayerId = currentPlayer?.id;
 
     const width = canvas.width;
     const height = canvas.height;
@@ -885,6 +883,9 @@ export default function SnakeGame() {
       const shouldRender = player.isAlive || (!player.isAlive && player.snake.length > 0);
       if (!shouldRender) return;
 
+      const isInvisible = player.effects.some(effect => effect.type === 'invisible');
+      if (isInvisible && player.id !== currentPlayerId) return;
+
       if (!player.isAlive) {
         ctx.globalAlpha = 0.6;
       }
@@ -977,7 +978,7 @@ export default function SnakeGame() {
     });
 
     frameCountRef.current = (frameCountRef.current || 0) + 1;
-  }, [foods, gameStarted, gridSize, players]);
+  }, [foods, gameStarted, gridSize, players, currentPlayer]);
 
   // Animation loop
   useEffect(() => {
@@ -1077,7 +1078,7 @@ export default function SnakeGame() {
               <div className="player-color" style={{ backgroundColor: player.color.replace('bg-', '').replace('-500', '') }}></div>
               <span>{player.name}{player.id === currentPlayerId && ' (你)'}</span>
               <span style={{ marginLeft: 'auto' }}>分数: {player.score}</span>
-              <span style={{ marginLeft: '12px' }}>复活甲: {player.reviveCharges ?? 0}</span>
+              <span style={{ marginLeft: '12px' }}>复活次数: {player.reviveCharges ?? 0}</span>
                {!player.isAlive && gameStarted && ' ☠️'}
                {!gameStarted && (player.isReady ? ' ✅' : ' ❌')}
             </div>
@@ -1087,19 +1088,31 @@ export default function SnakeGame() {
     </div>
   );
 
-  const EffectsPanel = ({ effects }: { effects: Effect[] }) => (
-    <div className="effects-panel">
+  const EffectsPanel = ({ effects, canDash, dashCooldownRemaining, isAlive }: { effects: Effect[]; canDash: boolean; dashCooldownRemaining: number; isAlive: boolean; }) => {
+    const cooldownSeconds = Math.max(0, Math.ceil(dashCooldownRemaining / 1000));
+    const dashStatusText = !isAlive
+      ? "不可用"
+      : canDash
+        ? "准备就绪"
+        : `冷却 ${cooldownSeconds} 秒`;
+    return (
+      <div className="effects-panel">
         <h2>当前效果</h2>
         <div id="current-effects">
-            {effects.length > 0 ? effects.map((effect, index) => {
-                const effectLabel = EFFECT_LABELS[effect.type] ?? effect.type;
-                return (
-                    <div key={index}>{effectLabel} - {Math.ceil(effect.duration / 1000)}秒</div>
-                );
-            }) : '无'}
+          {effects.length > 0 ? effects.map((effect, index) => {
+            const effectLabel = EFFECT_LABELS[effect.type] ?? effect.type;
+            return (
+              <div key={index}>{effectLabel} - {Math.ceil(effect.duration / 1000)}秒</div>
+            );
+          }) : '无'}
         </div>
-    </div>
-  );
+        <div className="dash-status">手动冲刺：{dashStatusText}</div>
+      </div>
+    );
+  };
+
+
+
 
   const FoodInfoPanel = ({ open, onToggle }: { open: boolean; onToggle: () => void }) => (
       <div className={`foods-info collapsible-panel${open ? ' open' : ' closed'}`}>
@@ -1399,7 +1412,7 @@ export default function SnakeGame() {
               </div>
             </div>
             <div className="sidebar">
-                {gameStarted && <EffectsPanel effects={currentPlayer?.effects || []} />}
+                {gameStarted && <EffectsPanel effects={currentPlayer?.effects || []} canDash={canDash} dashCooldownRemaining={dashCooldownRemaining} isAlive={!!currentPlayer?.isAlive} />}
                 <div className="desktop-only">
                   <PlayerList
                     players={players}

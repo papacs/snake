@@ -27,10 +27,10 @@ const io = new Server(httpServer, {
 const FOOD_TYPES = {
     NORMAL: { id: 1, color: '#ff0000', score: 10, length: 1, lifetime: 15000, name: "普通食物", description: "增加体型并获得基础积分" },
     FREEZE: { id: 2, color: '#00aaff', score: 20, effect: 'freeze', duration: 3000, lifetime: 8000, name: "冰冻果实", description: "束缚目标 3 秒，需提早规划" },
-    SPEED: { id: 3, color: '#ff5500', score: 30, effect: 'speed', duration: 5000, speedMultiplier: 2, lifetime: 8000, name: "加速辣椒", description: "5 秒超速疾行，冲刺或逃生利器" },
+    SPEED: { id: 3, color: '#ff5500', score: 30, effect: 'speed', duration: 5000, speedMultiplier: 3, lifetime: 8000, name: "加速辣椒", description: "5 秒超速疾行，冲刺或逃生利器" },
     SHRINK: { id: 4, color: '#aa00ff', score: 20, effect: 'shrink', value: 3, lifetime: 8000, name: "缩小蘑菇", description: "立刻瘦身 3 节，穿缝躲避更灵活" },
     RAINBOW: { id: 5, color: 'rainbow', score: 50, effect: 'random', lifetime: 7000, name: "彩虹糖果", description: "随机触发惊喜或惊吓，挑战手气" },
-    TELEPORT: { id: 6, color: 'linear-gradient(45deg, #00ffaa, #00aaff)', score: 20, effect: 'teleport', lifetime: 7000, name: "传送门", description: "瞬移至安全随机点，摆脱险境" },
+    TELEPORT: { id: 6, color: 'linear-gradient(45deg, #00ffaa, #00aaff)', score: 20, effect: 'invisible', duration: 5000, lifetime: 7000, name: "传送门", description: "瞬移至安全随机点，摆脱险境" },
     REVIVE: { id: 7, color: '#ffd700', score: 60, effect: 'revive', lifetime: 12000, name: "复活甲", description: "死亡后原地复活并获得短暂无敌" },
     GHOST: { id: 8, color: '#00ff00', score: 40, effect: 'ghost', duration: 6000, lifetime: 8000, name: "穿墙能力", description: "6 秒穿墙无阻，穿梭追击无惧障碍" },
     INVINCIBLE: { id: 9, color: '#ffffff', score: 50, effect: 'invincible', duration: 5000, lifetime: 8000, name: "无敌状态", description: "5 秒碰撞免疫，尽情冲撞得分" },
@@ -43,7 +43,7 @@ type Position = {
 };
 
 type Effect = {
-    type: 'freeze' | 'speed' | 'ghost' | 'invincible' | 'magnet' | 'shrink' | 'grow' | 'teleport' | 'revive';
+    type: 'freeze' | 'speed' | 'ghost' | 'invincible' | 'magnet' | 'shrink' | 'grow' | 'invisible' | 'revive';
     duration: number;
     // 可选的额外信息
     [key: string]: unknown;
@@ -70,6 +70,7 @@ type Player = {
   score: number;
   effects: Effect[];
   speed: number; // 基础速度 (ticks per move)
+  dashCooldownEnd: number;
   reviveCharges: number;
 };
 
@@ -94,6 +95,7 @@ type PlayerSnapshot = {
   score: number;
   effects: Effect[];
   reviveCharges: number;
+  dashCooldownEnd: number;
   color: string;
 };
 
@@ -116,6 +118,7 @@ type PlayerDelta = {
   score?: number;
   effects?: Effect[];
   reviveCharges?: number;
+  dashCooldownEnd?: number;
   color?: string;
 };
 
@@ -163,6 +166,7 @@ function createPlayerSnapshot(player: Player): PlayerSnapshot {
         score: player.score,
         effects: cloneEffects(player.effects),
         reviveCharges: player.reviveCharges,
+        dashCooldownEnd: player.dashCooldownEnd,
         color: player.color,
     };
 }
@@ -178,6 +182,38 @@ function cloneFood(food: Food): Food {
         isCorpse: food.isCorpse,
         corpseColor: food.corpseColor,
     };
+}
+
+function getActiveSpeedMultiplier(player: Player): number {
+    const speedEffects = player.effects.filter(effect => effect.type === 'speed' && typeof effect.speedMultiplier === 'number');
+    if (speedEffects.length === 0) {
+        return 1;
+    }
+    return speedEffects.reduce((max, effect) => {
+        const multiplier = typeof effect.speedMultiplier === 'number' ? Number(effect.speedMultiplier) : 1;
+        return multiplier > max ? multiplier : max;
+    }, 1);
+}
+
+function recalculatePlayerSpeed(player: Player): void {
+    const multiplier = getActiveSpeedMultiplier(player);
+    player.speed = Math.max(1, Math.floor(multiplier));
+}
+
+function canTriggerDash(player: Player): boolean {
+    if (!player.isAlive) return false;
+    if (player.snake.length === 0) return false;
+    if (player.effects.some(effect => effect.type === 'freeze')) return false;
+    return Date.now() >= player.dashCooldownEnd;
+}
+
+function triggerManualDash(player: Player, room: Room): boolean {
+    if (!canTriggerDash(player)) return false;
+    player.dashCooldownEnd = Date.now() + DASH_COOLDOWN_MS;
+    player.effects.push({ type: 'speed', duration: DASH_DURATION_MS, speedMultiplier: MANUAL_DASH_SPEED_MULTIPLIER, source: 'dash' });
+    recalculatePlayerSpeed(player);
+    io.to(room.id).emit('effectTriggered', { playerId: player.id, effects: ['speed'] });
+    return true;
 }
 
 function effectsEqual(a: Effect[], b: Effect[]): boolean {
@@ -241,6 +277,7 @@ function buildPlayerDelta(previous: PlayerSnapshot | undefined, current: Player)
         delta.score = current.score;
         delta.effects = cloneEffects(current.effects);
         delta.reviveCharges = current.reviveCharges;
+        delta.dashCooldownEnd = current.dashCooldownEnd;
         delta.color = current.color;
         return delta;
     }
@@ -262,6 +299,11 @@ function buildPlayerDelta(previous: PlayerSnapshot | undefined, current: Player)
 
     if (current.reviveCharges !== previous.reviveCharges) {
         delta.reviveCharges = current.reviveCharges;
+        changed = true;
+    }
+
+    if (current.dashCooldownEnd !== previous.dashCooldownEnd) {
+        delta.dashCooldownEnd = current.dashCooldownEnd;
         changed = true;
     }
 
@@ -386,6 +428,9 @@ function computeStateDelta(room: Room): StateDelta | null {
     return delta;
 }
 const GAME_SPEED = 250; // 稍微加快基础游戏速度
+const DASH_DURATION_MS = 3000;
+const DASH_COOLDOWN_MS = 5000;
+const MANUAL_DASH_SPEED_MULTIPLIER = 2;
 const REVIVE_IMMUNITY_DURATION = 3000;
 const REVIVE_GHOST_DURATION = 3000;
 const MAX_ROOM_PLAYERS = 4;
@@ -516,8 +561,8 @@ function applyFoodEffect(
             triggeredEffects.push('freeze');
             break;
         case 'speed':
-            player.speed = foodType.speedMultiplier;
             player.effects.push({ type: 'speed', duration: foodType.duration, speedMultiplier: foodType.speedMultiplier });
+            recalculatePlayerSpeed(player);
             triggeredEffects.push('speed');
             break;
         case 'shrink':
@@ -527,10 +572,9 @@ function applyFoodEffect(
             }
             triggeredEffects.push('shrink');
             break;
-        case 'teleport':
-            const newPos = generateRandomPosition(room.gridSize, room.players.size > 1 ? Array.from(room.players.values()).flatMap(p => p.snake) : player.snake, 3);
-            player.snake = [newPos, {x: newPos.x - 1, y: newPos.y}];
-            triggeredEffects.push('teleport');
+        case 'invisible':
+            player.effects.push({ type: 'invisible', duration: foodType.duration });
+            triggeredEffects.push('invisible');
             break;
         case 'ghost':
             player.effects.push({ type: 'ghost', duration: foodType.duration });
@@ -596,14 +640,24 @@ function startGameLoop(roomId: string) {
 
         // 2. Update player effects
         players.forEach(player => {
+            let speedEffectChanged = false;
             player.effects = player.effects.filter(effect => {
                 effect.duration -= GAME_SPEED;
                 if (effect.duration <= 0) {
-                    if (effect.type === 'speed') player.speed = 1; // Reset speed
+                    if (effect.type === 'speed') {
+                        speedEffectChanged = true;
+                    }
                     return false;
                 }
                 return true;
             });
+            if (speedEffectChanged) {
+                recalculatePlayerSpeed(player);
+            } else if (player.effects.some(effect => effect.type === 'speed')) {
+                recalculatePlayerSpeed(player);
+            } else if (player.speed !== 1) {
+                player.speed = 1;
+            }
         });
 
         // 3. Handle Magnet Effect
@@ -662,8 +716,9 @@ function startGameLoop(roomId: string) {
                 });
         }
 
-        const nextPositions: { [id: string]: { head: Position, newSnake: Position[] } } = {};
+        const movementStates = new Map<string, { snake: Position[]; movesToProcess: number }>();
         const playersToKill = new Map<string, { killerId?: string }>();
+        const nextPositions: { [id: string]: { head: Position; newSnake: Position[] } } = {};
 
         const markPlayerForDeath = (playerId: string, killerId?: string) => {
             const existing = playersToKill.get(playerId);
@@ -673,78 +728,170 @@ function startGameLoop(roomId: string) {
             });
         };
 
-        // 4. Calculate next positions for all players
         players.forEach(player => {
-            if (!player.isAlive) return;
-
-            // Apply direction change
-            player.direction = player.nextDirection;
-
-            // Handle Freeze effect
-            if (player.effects.some(e => e.type === 'freeze')) {
-                nextPositions[player.id] = { head: player.snake[0], newSnake: player.snake };
-                return;
+            const clonedSnake = cloneSnake(player.snake);
+            let movesToProcess = 0;
+            if (player.isAlive) {
+                player.direction = player.nextDirection;
+                const isFrozen = player.effects.some(effect => effect.type === 'freeze');
+                if (!isFrozen) {
+                    movesToProcess = Math.max(1, player.speed);
+                }
             }
-
-            const head = { ...player.snake[0] };
-            switch (player.direction) {
-                case "UP": head.y -= 1; break;
-                case "DOWN": head.y += 1; break;
-                case "LEFT": head.x -= 1; break;
-                case "RIGHT": head.x += 1; break;
-            }
-            
-            // Handle Ghost effect (wall collision)
-            if (player.effects.some(e => e.type === 'ghost')) {
-                if (head.x < 0) head.x = room.gridSize - 1;
-                if (head.x >= room.gridSize) head.x = 0;
-                if (head.y < 0) head.y = room.gridSize - 1;
-                if (head.y >= room.gridSize) head.y = 0;
-            }
-
-            nextPositions[player.id] = { head, newSnake: [head, ...player.snake] };
+            movementStates.set(player.id, { snake: clonedSnake, movesToProcess });
         });
 
-        // 5. Collision Detection
-        players.forEach(player => {
-            if (!player.isAlive) return;
-            const { head } = nextPositions[player.id];
-            const isInvincible = player.effects.some(e => e.type === 'invincible');
-            const hasGhost = player.effects.some(e => e.type === 'ghost');
-            if (isInvincible) return;
+        let maxMoves = 0;
+        movementStates.forEach(state => {
+            if (state.movesToProcess > maxMoves) {
+                maxMoves = state.movesToProcess;
+            }
+        });
 
-            // Wall collision (for non-ghost players)
-            if (!hasGhost) {
-                if (head.x < 0 || head.x >= room.gridSize || head.y < 0 || head.y >= room.gridSize) {
-                    markPlayerForDeath(player.id);
-                }
+        for (let step = 0; step < maxMoves; step += 1) {
+            const movingPlayers = players.filter(player => {
+                if (!player.isAlive) return false;
+                if (playersToKill.has(player.id)) return false;
+                const state = movementStates.get(player.id);
+                if (!state) return false;
+                if (state.movesToProcess <= step) return false;
+                return !player.effects.some(effect => effect.type === 'freeze');
+            });
+
+            if (movingPlayers.length === 0) {
+                continue;
             }
 
-            // Self and other snake collision
-            for (const otherPlayer of players) {
-                if (!otherPlayer.isAlive) continue;
-                const targetSnake = (player.id === otherPlayer.id) ? otherPlayer.snake.slice(1) : otherPlayer.snake;
-                if (targetSnake.some(segment => segment.x === head.x && segment.y === head.y)) {
-                    const killerId = player.id === otherPlayer.id ? undefined : otherPlayer.id;
-                    markPlayerForDeath(player.id, killerId);
-                    break;
+            const proposedMoves = new Map<string, { head: Position; newSnake: Position[] }>();
+
+            movingPlayers.forEach(player => {
+                const state = movementStates.get(player.id);
+                if (!state || state.snake.length === 0) return;
+                const head = { ...state.snake[0] };
+
+                switch (player.direction) {
+                    case "UP": head.y -= 1; break;
+                    case "DOWN": head.y += 1; break;
+                    case "LEFT": head.x -= 1; break;
+                    case "RIGHT": head.x += 1; break;
                 }
-            }
-            
-            // Head-on collision
-            for (const otherPlayer of players) {
-                if (player.id === otherPlayer.id || !otherPlayer.isAlive) continue;
-                const otherHead = nextPositions[otherPlayer.id]?.head;
-                if (head.x === otherHead?.x && head.y === otherHead?.y) {
-                    if (player.snake.length > otherPlayer.snake.length) {
-                        markPlayerForDeath(otherPlayer.id, player.id);
-                    } else if (player.snake.length < otherPlayer.snake.length) {
-                        markPlayerForDeath(player.id, otherPlayer.id);
-                    } else {
+
+                if (player.effects.some(effect => effect.type === 'ghost')) {
+                    if (head.x < 0) head.x = room.gridSize - 1;
+                    if (head.x >= room.gridSize) head.x = 0;
+                    if (head.y < 0) head.y = room.gridSize - 1;
+                    if (head.y >= room.gridSize) head.y = 0;
+                }
+
+                const newSnake = [head, ...state.snake];
+                proposedMoves.set(player.id, { head, newSnake });
+                nextPositions[player.id] = { head: clonePosition(head), newSnake: cloneSnake(newSnake) };
+            });
+
+            movingPlayers.forEach(player => {
+                if (playersToKill.has(player.id)) return;
+                const proposed = proposedMoves.get(player.id);
+                if (!proposed) return;
+
+                const head = proposed.head;
+                const isInvincible = player.effects.some(effect => effect.type === 'invincible');
+                const hasGhost = player.effects.some(effect => effect.type === 'ghost');
+
+                if (!isInvincible && !hasGhost) {
+                    if (head.x < 0 || head.x >= room.gridSize || head.y < 0 || head.y >= room.gridSize) {
                         markPlayerForDeath(player.id);
-                        markPlayerForDeath(otherPlayer.id);
+                        return;
                     }
                 }
+
+                if (isInvincible) {
+                    return;
+                }
+
+                for (const otherPlayer of players) {
+                    if (!otherPlayer.isAlive) continue;
+                    const otherState = movementStates.get(otherPlayer.id);
+                    if (!otherState || otherState.snake.length === 0) continue;
+                    const targetSnake = otherPlayer.id === player.id ? otherState.snake.slice(1) : otherState.snake;
+                    if (targetSnake.some(segment => segment.x === head.x && segment.y === head.y)) {
+                        const killerId = otherPlayer.id === player.id ? undefined : otherPlayer.id;
+                        markPlayerForDeath(player.id, killerId);
+                        break;
+                    }
+                }
+            });
+
+            movingPlayers.forEach(player => {
+                if (playersToKill.has(player.id)) return;
+                if (!player.isAlive) return;
+                if (player.effects.some(effect => effect.type === 'invincible')) return;
+                const proposed = proposedMoves.get(player.id);
+                if (!proposed) return;
+
+                for (const otherPlayer of movingPlayers) {
+                    if (otherPlayer.id === player.id) continue;
+                    if (!otherPlayer.isAlive) continue;
+                    const otherProposed = proposedMoves.get(otherPlayer.id);
+                    if (!otherProposed) continue;
+                    if (proposed.head.x === otherProposed.head.x && proposed.head.y === otherProposed.head.y) {
+                        const playerState = movementStates.get(player.id);
+                        const otherState = movementStates.get(otherPlayer.id);
+                        if (!playerState || !otherState) continue;
+                        if (playerState.snake.length > otherState.snake.length) {
+                            markPlayerForDeath(otherPlayer.id, player.id);
+                        } else if (playerState.snake.length < otherState.snake.length) {
+                            markPlayerForDeath(player.id, otherPlayer.id);
+                        } else {
+                            markPlayerForDeath(player.id);
+                            markPlayerForDeath(otherPlayer.id);
+                        }
+                    }
+                }
+            });
+
+            movingPlayers.forEach(player => {
+                if (playersToKill.has(player.id)) return;
+                if (!player.isAlive) return;
+                const proposed = proposedMoves.get(player.id);
+                if (!proposed) return;
+
+                const state = movementStates.get(player.id);
+                if (!state) return;
+
+                state.snake = proposed.newSnake;
+                player.snake = state.snake;
+
+                const head = state.snake[0];
+                const foodIndex = room.foods.findIndex(f => !f.isCorpse && Math.round(f.x) === head.x && Math.round(f.y) === head.y);
+                const ateByMagnet = playersAteViaMagnet.has(player.id);
+
+                if (foodIndex !== -1) {
+                    const eatenFood = room.foods.splice(foodIndex, 1)[0];
+                    applyFoodEffect(player, eatenFood.type, room);
+                    const allSnakes = Array.from(movementStates.values()).map(entry => entry.snake);
+                    room.foods.push(generateFood(room.foods, allSnakes, room.gridSize));
+                } else if (ateByMagnet) {
+                    playersAteViaMagnet.delete(player.id);
+                } else {
+                    state.snake.pop();
+                }
+
+                nextPositions[player.id] = {
+                    head: clonePosition(state.snake[0]),
+                    newSnake: cloneSnake(state.snake),
+                };
+            });
+        }
+
+        players.forEach(player => {
+            if (!player.isAlive) return;
+            if (!nextPositions[player.id]) {
+                const state = movementStates.get(player.id);
+                if (!state) return;
+                nextPositions[player.id] = {
+                    head: clonePosition(state.snake[0]),
+                    newSnake: cloneSnake(state.snake),
+                };
             }
         });
 
@@ -753,52 +900,52 @@ function startGameLoop(roomId: string) {
             const player = room.players.get(playerId);
             if (!player) return;
 
-        const killer = killerId ? room.players.get(killerId) : undefined;
+            const killer = killerId ? room.players.get(killerId) : undefined;
 
-        io.to(roomId).emit('playerDied', { playerId, killerId });
+            io.to(roomId).emit('playerDied', { playerId, killerId });
 
-        if (killer && player) {
-            io.to(roomId).emit('killAnnouncement', {
-                killerId,
-                killerName: killer.name,
-                victimId: playerId,
-                victimName: player.name,
-                timestamp: Date.now(),
-            });
-        }
-
-        if (player.reviveCharges > 0) {
-            player.reviveCharges -= 1;
-            player.isAlive = true;
-            const nextPosition = nextPositions[player.id];
-            const minimalSnake = (() => {
-                if (nextPosition) {
-                    const trimmed = nextPosition.newSnake.slice(0, 2);
-                    if (trimmed.length === 1) {
-                        trimmed.push({ ...trimmed[0] });
-                    }
-                    nextPosition.newSnake = trimmed;
-                    nextPosition.head = trimmed[0];
-                    return trimmed;
-                }
-                if (player.snake.length >= 2) {
-                    return player.snake.slice(0, 2);
-                }
-                if (player.snake.length === 1) {
-                    return [player.snake[0], { ...player.snake[0] }];
-                }
-                const fallback = { x: 0, y: 0 };
-                return [fallback, { ...fallback }];
-            })();
-            player.snake = minimalSnake;
-            player.effects.push({ type: 'invincible', duration: REVIVE_IMMUNITY_DURATION });
-            player.effects.push({ type: 'ghost', duration: REVIVE_GHOST_DURATION });
-            if (killer) {
-                killer.reviveCharges += 1;
+            if (killer && player) {
+                io.to(roomId).emit('killAnnouncement', {
+                    killerId,
+                    killerName: killer.name,
+                    victimId: playerId,
+                    victimName: player.name,
+                    timestamp: Date.now(),
+                });
             }
-            io.to(roomId).emit('effectTriggered', { playerId: player.id, effects: ['revive'] });
-            return;
-        }
+
+            if (player.reviveCharges > 0) {
+                player.reviveCharges -= 1;
+                player.isAlive = true;
+                const nextPosition = nextPositions[player.id];
+                const minimalSnake = (() => {
+                    if (nextPosition) {
+                        const trimmed = nextPosition.newSnake.slice(0, 2);
+                        if (trimmed.length === 1) {
+                            trimmed.push({ ...trimmed[0] });
+                        }
+                        nextPosition.newSnake = trimmed;
+                        nextPosition.head = trimmed[0];
+                        return trimmed;
+                    }
+                    if (player.snake.length >= 2) {
+                        return player.snake.slice(0, 2);
+                    }
+                    if (player.snake.length === 1) {
+                        return [player.snake[0], { ...player.snake[0] }];
+                    }
+                    const fallback = { x: 0, y: 0 };
+                    return [fallback, { ...fallback }];
+                })();
+                player.snake = minimalSnake;
+                player.effects.push({ type: 'invincible', duration: REVIVE_IMMUNITY_DURATION });
+                player.effects.push({ type: 'ghost', duration: REVIVE_GHOST_DURATION });
+                if (killer) {
+                    killer.reviveCharges += 1;
+                }
+                io.to(roomId).emit('effectTriggered', { playerId: player.id, effects: ['revive'] });
+                return;
+            }
 
             player.isAlive = false;
             const bodyFood: Food[] = player.snake.map(segment => ({
@@ -818,27 +965,12 @@ function startGameLoop(roomId: string) {
             }
         });
 
-        // 7. Update snake positions and handle food eating
+        // 7. Finalize snake positions after movement
         players.forEach(player => {
             if (!player.isAlive) return;
-            
-            const { head, newSnake } = nextPositions[player.id];
-            const foodIndex = room.foods.findIndex(f => !f.isCorpse && Math.round(f.x) === head.x && Math.round(f.y) === head.y);
-            const ateByMagnet = playersAteViaMagnet.has(player.id);
-
-            if (foodIndex !== -1) {
-                const eatenFood = room.foods.splice(foodIndex, 1)[0];
-                applyFoodEffect(player, eatenFood.type, room);
-                // Generate new food
-                const allSnakes = players.map(p => p.snake);
-                room.foods.push(generateFood(room.foods, allSnakes, room.gridSize));
-            } else if (ateByMagnet) {
-                // Already handled via magnet consumption
-            } else if (!player.effects.some(e => e.type === 'freeze')) {
-                // Only pop the tail if the snake is not frozen and didn't eat
-                newSnake.pop();
-            }
-            player.snake = newSnake;
+            const nextPosition = nextPositions[player.id];
+            if (!nextPosition) return;
+            player.snake = nextPosition.newSnake;
         });
 
         // 8. Check for game over: The game ends when no players are alive.
@@ -881,6 +1013,7 @@ io.on('connection', (socket) => {
       score: 0,
       effects: [],
       speed: 1,
+      dashCooldownEnd: 0,
       reviveCharges: 0,
     };
     const room: Room = {
@@ -923,6 +1056,7 @@ io.on('connection', (socket) => {
       score: 0,
       effects: [],
       speed: 1,
+      dashCooldownEnd: 0,
       reviveCharges: 0,
       };
       room.players.set(playerId, newPlayer);
@@ -964,6 +1098,7 @@ io.on('connection', (socket) => {
         player.score = 0;
         player.effects = [];
         player.speed = 1;
+        player.dashCooldownEnd = 0;
         player.reviveCharges = 0;
         existingPositions.push(randomPosition);
       });
@@ -1061,6 +1196,7 @@ io.on('connection', (socket) => {
             p.isAlive = false;
             p.snake = [];
             p.reviveCharges = 0;
+            p.dashCooldownEnd = 0;
         });
         room.stateVersion = 0;
         room.snapshot.players.clear();
@@ -1069,6 +1205,14 @@ io.on('connection', (socket) => {
         io.to(roomId).emit('updatePlayers', Array.from(room.players.values()));
         broadcastRoomList();
     }
+  });
+
+  socket.on('requestDash', ({ roomId }) => {
+    const room = rooms.get(roomId);
+    if (!room || !room.gameStarted) return;
+    const player = room.players.get(socket.id);
+    if (!player) return;
+    triggerManualDash(player, room);
   });
 
   socket.on('disconnect', () => {
