@@ -79,6 +79,70 @@ const EFFECT_LABELS: Record<Effect['type'], string> = {
 
 
 
+type Food = Position & {
+  id: string;
+  type: (typeof FOOD_TYPES)[keyof typeof FOOD_TYPES];
+  spawnTime: number;
+  customLifetime?: number;
+  isCorpse?: boolean;
+  corpseColor?: string;
+};
+
+type Player = {
+  id: string;
+  name: string;
+  isReady: boolean;
+  snake: Position[];
+  direction: "UP" | "DOWN" | "LEFT" | "RIGHT";
+  color: string;
+  isAlive: boolean;
+  score: number;
+  effects: Effect[];
+  dashCooldownEnd: number;
+  reviveCharges: number;
+  nextDirection?: "UP" | "DOWN" | "LEFT" | "RIGHT";
+};
+
+type KillEvent = {
+  id: string;
+  killerId: string;
+  killerName: string;
+  victimId: string;
+  victimName: string;
+  timestamp: number;
+};
+
+type PlayerMovementDelta = {
+  head: Position;
+  removedTail: number;
+};
+
+type PlayerDelta = {
+  id: string;
+  movement?: PlayerMovementDelta;
+  fullSnake?: Position[];
+  direction?: Player["direction"];
+  isAlive?: boolean;
+  score?: number;
+  effects?: Effect[];
+  reviveCharges?: number;
+  dashCooldownEnd?: number;
+  color?: string;
+};
+
+type FoodUpdate = Pick<Food, "id" | "x" | "y" | "spawnTime" | "customLifetime" | "isCorpse" | "corpseColor">;
+
+type StateDelta = {
+  tick: number;
+  players?: PlayerDelta[];
+  removedPlayers?: string[];
+  foods?: {
+    added?: Food[];
+    updated?: FoodUpdate[];
+    removed?: string[];
+  };
+};
+
 const clonePosition = (position: Position): Position => ({ x: position.x, y: position.y });
 const cloneSnake = (snake: Position[]): Position[] => snake.map(clonePosition);
 const cloneEffects = (effects: Effect[]): Effect[] => effects.map(effect => ({ ...effect }));
